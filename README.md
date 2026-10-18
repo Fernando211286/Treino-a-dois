@@ -3,6 +3,6 @@
 App de treino e dieta para casal, sincronizado com Google Sheets.
 
 - `index.html`: o app (publicado pelo GitHub Pages).
-- `apps-script.gs`: código para colar em Extensões > Apps Script da planilha e implantar como App da Web.
+- `apps-script.gs`: código para colar em Extensões > Apps Script da planilha e implantar como App da Web. Ele grava cada série registrada na aba **Treinos executados** (data, pessoa, exercício, carga, repetições).
 
 O link da planilha é informado em Ajustes, dentro do app, e fica salvo só no celular de cada um.

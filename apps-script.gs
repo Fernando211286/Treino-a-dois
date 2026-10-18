@@ -1,8 +1,15 @@
 /**
  * Treino a Dois — sincronização com Google Sheets
- * Cole este código em Extensões > Apps Script da planilha e implante como "App da Web".
+ * Cole este código em Extensões > Apps Script da planilha e implante como "App da Web"
+ * (Executar como: Eu · Quem pode acessar: Qualquer pessoa).
+ *
+ * Abas que o script cria e mantém:
+ *  - "Treinos executados": uma linha por série registrada (data, pessoa, exercício, carga, reps).
+ *  - "dados": cópia completa usada pelo app para sincronizar os dois celulares. Não edite.
  */
 const ABA = 'dados';
+const ABA_TREINOS = 'Treinos executados';
+const NOMES_PADRAO = { a: 'Marido', b: 'Esposa' };
 
 function aba_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -48,10 +55,65 @@ function doPost(e) {
     for (let i = 0; i < col.length; i++) if (col[i][0] === d.path) { r = i + 2; break; }
     if (r > 0) s.getRange(r, 1, 1, 3).setValues([linha]);
     else s.appendRow(linha);
+    if (d.path.indexOf('logs/') === 0) {
+      try { atualizarTreinos(); } catch (err) {} // a aba legível nunca impede o salvamento
+    }
     return saida_({ ok: true });
   } catch (err) {
     return saida_({ ok: false, erro: String(err) });
   } finally {
     lock.releaseLock();
+  }
+}
+
+/**
+ * Remonta a aba "Treinos executados" a partir dos registros do app.
+ * Também pode ser executada à mão no editor do Apps Script.
+ */
+function atualizarTreinos() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const v = aba_().getDataRange().getValues();
+
+  let nomes = Object.assign({}, NOMES_PADRAO);
+  for (let i = 1; i < v.length; i++) {
+    if (v[i][0] !== 'config/app') continue;
+    try { const c = JSON.parse(v[i][1]); if (c && c.names) nomes = Object.assign(nomes, c.names); } catch (e) {}
+  }
+
+  const linhas = [];
+  for (let i = 1; i < v.length; i++) {
+    const caminho = String(v[i][0] || '');
+    if (caminho.indexOf('logs/') !== 0) continue;
+    let doc;
+    try { doc = JSON.parse(v[i][1]); } catch (e) { continue; }
+    if (!doc || !doc.sessions) continue;
+    const pessoa = doc.pn || nomes[doc.p] || doc.p || '';
+    const exercicio = doc.n || String(doc.ex || '').replace(/_/g, ' ');
+    doc.sessions.forEach(function (sess) {
+      const p = String(sess.d || '').split('-');
+      if (p.length !== 3) return;
+      const data = new Date(+p[0], +p[1] - 1, +p[2]);
+      (sess.sets || []).forEach(function (set, k) {
+        if (!set || !(set.ok || set.kg != null || set.r != null)) return;
+        linhas.push([data, pessoa, exercicio, k + 1,
+          set.kg == null ? '' : set.kg, set.r == null ? '' : set.r, set.ok ? 'Sim' : 'Não']);
+      });
+    });
+  }
+
+  // Mais recentes primeiro; dentro do dia, por pessoa, exercício e série
+  linhas.sort(function (a, b) {
+    return (b[0] - a[0]) || String(a[1]).localeCompare(b[1]) || String(a[2]).localeCompare(b[2]) || (a[3] - b[3]);
+  });
+
+  let t = ss.getSheetByName(ABA_TREINOS);
+  if (!t) { t = ss.insertSheet(ABA_TREINOS, 0); }
+  t.clearContents();
+  const cab = ['Data', 'Pessoa', 'Exercício', 'Série', 'Carga (kg)', 'Repetições', 'Concluída'];
+  t.getRange(1, 1, 1, cab.length).setValues([cab]).setFontWeight('bold');
+  t.setFrozenRows(1);
+  if (linhas.length) {
+    t.getRange(2, 1, linhas.length, cab.length).setValues(linhas);
+    t.getRange(2, 1, linhas.length, 1).setNumberFormat('dd/MM/yyyy');
   }
 }

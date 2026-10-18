@@ -596,7 +596,7 @@ async function shPull(){
 function shSend(p){
   if(!SHURL||SENDING[p])return;const b=bodyOf(p);if(b==null){delete DIRTY[p];saveDirty();return}
   SENDING[p]=true;const snap=JSON.stringify(b);
-  fetch(SHURL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({path:p,body:b})})
+  fetch(SHURL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({path:p,body:p.startsWith('logs/')&&b.ex&&EX[b.ex]?{...b,n:EX[b.ex].n,pn:(state.cfg.names||{})[b.p]||''}:b})})
    .then(r=>r.json()).then(j=>{if(!j||!j.ok)throw new Error('falha');
      if(JSON.stringify(bodyOf(p))===snap){delete DIRTY[p];saveDirty()}
      if(state.sync!=='on'){state.sync='on';if(!typing())render()}})
@@ -810,7 +810,7 @@ function vAjustes(){
     <p class="note">Os registros deste aparelho estão sincronizados com o app.</p></div>`:`<div class="card form"><div class="sec-h" style="margin:0"><h2>Planilha do Google</h2></div>
     <label>Link do Apps Script (termina em /exec)<input id="cfg-sheet" value="${esc(SHURL)}" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" inputmode="url"></label>
     <button class="cta" id="sheet-save">Conectar planilha</button>
-    <p class="note">${!SHURL?'Sem planilha conectada: os registros ficam só neste celular.':state.sync==='on'?'Conectado. Os registros de vocês dois ficam salvos na planilha.':state.sync==='err'?'Sem conexão com a planilha agora. O que você marcar fica guardado aqui e é enviado assim que a conexão voltar.':'Conectando à planilha…'}</p></div>
+    <p class="note">${!SHURL?'Sem planilha conectada: os registros ficam só neste celular.':state.sync==='on'?'Conectado. Os treinos de vocês dois ficam salvos na planilha, na aba Treinos executados.':state.sync==='err'?'Sem conexão com a planilha agora. O que você marcar fica guardado aqui e é enviado assim que a conexão voltar.':'Conectando à planilha…'}</p></div>
   <div class="card"><div class="sec-h" style="margin:0"><h2>Abrir no celular dela</h2></div>
     <ol class="steps-list"><li>Toque em <b>Copiar link dela</b> e envie para ela.</li><li>Ela abre o link no navegador: o app já vem no perfil dela e conectado à planilha.</li><li>Ela adiciona à tela de início pelo menu do navegador.</li></ol>
     <button class="cta" id="copy-her">Copiar link dela</button></div>`}
