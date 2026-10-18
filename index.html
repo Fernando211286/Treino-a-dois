@@ -562,6 +562,8 @@ async function initDB(){
 const SHK='treino-a-dois-planilha',DIRTYK='treino-a-dois-pendentes';
 let SHURL='';try{SHURL=localStorage.getItem(SHK)||''}catch(e){}
 try{if(/^#(ela|b)(&|$)/i.test(location.hash||''))state.person='b';const m=(location.hash||'').match(/[#&]s=([^&]+)/);if(m){SHURL=decodeURIComponent(m[1]);localStorage.setItem(SHK,SHURL);history.replaceState(null,'',location.pathname+(state.person==='b'?'#ela':''))}}catch(e){}
+let SHPIN='';try{SHPIN=localStorage.getItem('treino-a-dois-pin')||''}catch(e){}
+function askPin(msg){const v=prompt(msg||'Digite o PIN do Treino a Dois');if(v==null)return false;SHPIN=v.trim();try{localStorage.setItem('treino-a-dois-pin',SHPIN)}catch(e){}return true}
 let DIRTY={};try{DIRTY=JSON.parse(localStorage.getItem(DIRTYK)||'{}')}catch(e){}
 const SENDING={};let SHSIG='',SHT=null,SHBUSY=false;
 const saveDirty=()=>{try{localStorage.setItem(DIRTYK,JSON.stringify(DIRTY))}catch(e){}};
@@ -577,8 +579,10 @@ function initSheets(){
 async function shPull(){
   if(!SHURL||SHBUSY)return;SHBUSY=true;
   try{
-    const r=await fetch(SHURL+(SHURL.includes('?')?'&':'?')+'t='+Date.now());
-    const j=await r.json();if(!j||!j.ok)throw new Error('resposta');
+    const r=await fetch(SHURL+(SHURL.includes('?')?'&':'?')+'pin='+encodeURIComponent(SHPIN)+'&t='+Date.now());
+    const j=await r.json();
+    if(j&&j.erro==='pin'){state.sync='pin';SHBUSY=false;render();if(askPin(SHPIN?'PIN incorreto. Digite o PIN do Treino a Dois':'Digite o PIN do Treino a Dois'))shPull();return}
+    if(!j||!j.ok)throw new Error('resposta');
     const was=state.sync;state.sync='on';
     Object.keys(DIRTY).forEach(shSend);
     const sig=JSON.stringify(j.docs||{});
@@ -596,11 +600,11 @@ async function shPull(){
 function shSend(p){
   if(!SHURL||SENDING[p])return;const b=bodyOf(p);if(b==null){delete DIRTY[p];saveDirty();return}
   SENDING[p]=true;const snap=JSON.stringify(b);
-  fetch(SHURL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({path:p,body:p.startsWith('logs/')&&b.ex&&EX[b.ex]?{...b,n:EX[b.ex].n,pn:(state.cfg.names||{})[b.p]||''}:b})})
-   .then(r=>r.json()).then(j=>{if(!j||!j.ok)throw new Error('falha');
+  fetch(SHURL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({path:p,body:p.startsWith('logs/')&&b.ex&&EX[b.ex]?{...b,n:EX[b.ex].n,pn:(state.cfg.names||{})[b.p]||''}:b,pin:SHPIN})})
+   .then(r=>r.json()).then(j=>{if(j&&j.erro==='pin'){state.sync='pin';throw new Error('pin')}if(!j||!j.ok)throw new Error('falha');
      if(JSON.stringify(bodyOf(p))===snap){delete DIRTY[p];saveDirty()}
      if(state.sync!=='on'){state.sync='on';if(!typing())render()}})
-   .catch(()=>{if(state.sync!=='err'){state.sync='err';if(!typing())render()}})
+   .catch(()=>{if(state.sync==='pin'){if(!typing())render();return}if(state.sync!=='err'){state.sync='err';if(!typing())render()}})
    .finally(()=>{SENDING[p]=false;if(DIRTY[p]&&state.sync==='on'&&JSON.stringify(bodyOf(p))!==snap)shSend(p)});
 }
 function writeDoc(path,body){
@@ -810,9 +814,10 @@ function vAjustes(){
     <p class="note">Os registros deste aparelho estão sincronizados com o app.</p></div>`:`<div class="card form"><div class="sec-h" style="margin:0"><h2>Planilha do Google</h2></div>
     <label>Link do Apps Script (termina em /exec)<input id="cfg-sheet" value="${esc(SHURL)}" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" inputmode="url"></label>
     <button class="cta" id="sheet-save">Conectar planilha</button>
-    <p class="note">${!SHURL?'Sem planilha conectada: os registros ficam só neste celular.':state.sync==='on'?'Conectado. Os treinos de vocês dois ficam salvos na planilha, na aba Treinos executados.':state.sync==='err'?'Sem conexão com a planilha agora. O que você marcar fica guardado aqui e é enviado assim que a conexão voltar.':'Conectando à planilha…'}</p></div>
+    ${SHURL?`<button class="cta" id="pin-set" style="background:var(--raised);color:var(--ink)">Informar PIN</button>`:''}
+    <p class="note">${!SHURL?'Sem planilha conectada: os registros ficam só neste celular.':state.sync==='on'?'Conectado. Os treinos de vocês dois ficam salvos na planilha, na aba Treinos executados.':state.sync==='pin'?'PIN incorreto ou não informado. Toque em <b>Informar PIN</b>.':state.sync==='err'?'Sem conexão com a planilha agora. O que você marcar fica guardado aqui e é enviado assim que a conexão voltar.':'Conectando à planilha…'}</p></div>
   <div class="card"><div class="sec-h" style="margin:0"><h2>Abrir no celular dela</h2></div>
-    <ol class="steps-list"><li>Toque em <b>Copiar link dela</b> e envie para ela.</li><li>Ela abre o link no navegador: o app já vem no perfil dela e conectado à planilha.</li><li>Ela adiciona à tela de início pelo menu do navegador.</li></ol>
+    <ol class="steps-list"><li>Toque em <b>Copiar link dela</b> e envie para ela.</li><li>Ela abre o link no navegador: o app já vem no perfil dela e conectado à planilha. Na primeira vez, ela digita o PIN.</li><li>Ela adiciona à tela de início pelo menu do navegador.</li></ol>
     <button class="cta" id="copy-her">Copiar link dela</button></div>`}
   <p class="note">Ilustrações dos exercícios: <a href="https://github.com/everkinetic/data" target="_blank" rel="noopener">Everkinetic</a>, licença CC BY-SA 4.0.</p>`;
 }
@@ -899,6 +904,7 @@ document.addEventListener('click',ev=>{
   if(b.id==='sheet-save'){const v=$('#cfg-sheet').value.trim();if(v&&!/^https:\/\/script\.google(usercontent)?\.com\//.test(v)){toast('Esse não parece um link do Apps Script');return}
     SHURL=v;SHSIG='';try{v?localStorage.setItem(SHK,v):localStorage.removeItem(SHK)}catch(e){}
     if(v){Object.keys(state.logs).forEach(k=>DIRTY['logs/'+k]=1);saveDirty();initSheets();toast('Conectando à planilha…')}else{state.sync='local';render();toast('Planilha desconectada')}return}
+  if(b.id==='pin-set'){if(askPin()){SHSIG='';shPull()}return}
   if(b.id==='copy-her'){const u=location.origin+location.pathname+'#ela'+(SHURL?'&s='+encodeURIComponent(SHURL):'');
     (navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>toast('Link copiado'),()=>{prompt('Copie o link:',u)});return}
   if(b.id==='cfg-save'){const a=$('#cfg-a').value.trim()||DEF.names.a,bb=$('#cfg-b').value.trim()||DEF.names.b,st=$('#cfg-start').value||state.cfg.start;state.cfg={...state.cfg,names:{a,b:bb},start:st};lsSave();writeDoc('config/app',state.cfg);render();toast('Ajustes salvos');return}

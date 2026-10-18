@@ -8,6 +8,7 @@
  *  - "dados": cópia completa usada pelo app para sincronizar os dois celulares. Não edite.
  */
 const ABA = 'dados';
+const PIN = 'TROQUE-AQUI'; // coloque aqui o PIN de vocês (não publique o PIN real no GitHub)
 const ABA_TREINOS = 'Treinos executados';
 const NOMES_PADRAO = { a: 'Marido', b: 'Esposa' };
 
@@ -28,7 +29,8 @@ function saida_(obj) {
 }
 
 // O app lê todos os registros
-function doGet() {
+function doGet(e) {
+  if (!e || !e.parameter || e.parameter.pin !== PIN) return saida_({ ok: false, erro: 'pin' });
   const v = aba_().getDataRange().getValues();
   const docs = {};
   for (let i = 1; i < v.length; i++) {
@@ -44,6 +46,7 @@ function doPost(e) {
   lock.waitLock(20000);
   try {
     const d = JSON.parse(e.postData.contents);
+    if (d.pin !== PIN) return saida_({ ok: false, erro: 'pin' });
     if (!d.path || !/^(logs\/[\w.-]+|config\/app)$/.test(d.path)) return saida_({ ok: false, erro: 'caminho' });
     const json = JSON.stringify(d.body);
     if (json.length > 49000) return saida_({ ok: false, erro: 'grande demais' });
