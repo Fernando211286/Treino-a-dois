@@ -1092,7 +1092,7 @@ document.addEventListener('click',ev=>{
     if(old.sessions.some(s=>s.d===td))old.sessions=old.sessions.filter(s=>s.d!==td);else old.sessions.push({d:td});
     old.sessions.sort((a,b)=>a.d<b.d?-1:1);old.sessions=old.sessions.slice(-80);state.logs[id]=old;writeDoc('logs/'+id,old);render();return}
   if(D.rt){if(D.rt==='reset'){RT.i=0;RT.left=RT.ph[0][1];RT.on=false;keepAwake(false)}else{if(RT.i>=RT.ph.length){RT.i=0;RT.left=RT.ph[0][1]}RT.on=!RT.on;if(RT.on){beep(990,.15);keepAwake(true)}else keepAwake(false)}render();return}
-  if(b.id==='ia-save'){const v=$('#cfg-ia').value.trim();if(v&&!/^[\w.-]{20,}$/.test(v)){toast('Essa chave parece incompleta');return}try{v?localStorage.setItem(IAK,v):localStorage.removeItem(IAK)}catch(e){}render();toast(v?'Chave salva. Já pode fotografar o prato':'Chave removida');return}
+  if(b.id==='ia-save'){const v=$('#cfg-ia').value.replace(/\s+/g,'');if(v&&v.length<20){toast('Essa chave parece incompleta');return}try{v?localStorage.setItem(IAK,v):localStorage.removeItem(IAK)}catch(e){}render();toast(v?'Chave salva. Já pode fotografar o prato':'Chave removida');return}
   if(b.id==='sheet-save'){const v=$('#cfg-sheet').value.trim();if(v&&!/^https:\/\/script\.google(usercontent)?\.com\//.test(v)){toast('Esse não parece um link do Apps Script');return}
     SHURL=v;SHSIG='';try{v?localStorage.setItem(SHK,v):localStorage.removeItem(SHK)}catch(e){}
     if(v){Object.keys(state.logs).forEach(k=>DIRTY['logs/'+k]=1);saveDirty();initSheets();toast('Conectando à planilha…')}else{state.sync='local';render();toast('Planilha desconectada')}return}
