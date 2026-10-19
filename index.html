@@ -359,7 +359,7 @@ const EX={
  // Segunda — Peito e tríceps (base: dia de peito do Ramon Dino)
  supino_incl:{n:'Supino inclinado com halteres',s:4,r:'8–12',an:'incl',tool:'db',c:['Banco entre 30° e 45°, escápulas encaixadas','Desça os halteres até a linha do peito, cotovelos a ~45°','Suba unindo os halteres sem bater um no outro']},
  supino_maq:{n:'Supino na máquina',s:4,r:'8–12',an:'maqsupino',tool:'handle',c:['Ajuste o banco para as pegadas ficarem na linha do peito','Empurre sem tirar as costas do encosto','Volte devagar até sentir o peito alongar']},
- supino_decl:{n:'Supino declinado',s:3,r:'8–12',an:'decl',tool:'bar',c:['Pernas presas no apoio, cabeça abaixo do quadril','Desça a barra na parte de baixo do peito','Empurre na mesma linha, sem tirar as costas do banco']},
+ supino_decl:{n:'Supino declinado',s:3,min:3,r:'8–12',an:'decl',tool:'bar',c:['Pernas presas no apoio, cabeça abaixo do quadril','Desça a barra na parte de baixo do peito','Empurre na mesma linha, sem tirar as costas do banco']},
  peck_deck:{n:'Crossover (ou peck deck)',s:3,r:'12',an:'peckdeck',tool:'handle',c:['Polias no alto, um pé à frente, tronco levemente inclinado','Traga as mãos em arco até se encontrarem à frente do quadril','Volte abrindo devagar até sentir o peito alongar. No peck deck o movimento é o mesmo, sentado']},
  triceps_corda:{n:'Tríceps na corda',s:3,r:'10–12',an:'pushdown',tool:'handle',c:['Cotovelos colados ao corpo e parados','Estenda e abra a corda no final','Volte só até o antebraço ficar paralelo ao chão']},
  triceps_cabo_overhead:{n:'Tríceps overhead no cabo',s:3,r:'12',an:'overcabo',tool:'handle',c:['De costas para a polia, corda atrás da cabeça','Estenda os braços para frente e para cima','Mantenha os cotovelos apontados para frente']},
@@ -593,7 +593,7 @@ const IC={
 };
 
 /* ---------- estado ---------- */
-const APPV='2.2';
+const APPV='2.3';
 const WD=['dom','seg','ter','qua','qui','sex','sab'];
 const WFULL={seg:'Segunda',ter:'Terça',qua:'Quarta',qui:'Quinta',sex:'Sexta',sab:'Sábado',dom:'Domingo'};
 const DEF={names:{a:'Marido',b:'Esposa'},start:'2026-10-18'};
@@ -686,7 +686,7 @@ function weekInfo(){
   const diff=Math.round((n-s)/864e5),w=Math.max(1,Math.floor(diff/7)+1),cw=((w-1)%8)+1,cyc=Math.floor((w-1)/8)+1;
   return{w,cw,cyc,phase:cw<=2?'read':cw<=7?'hip':'deload'};
 }
-const setsFor=(b,ph)=>ph==='read'?Math.max(2,b-1):ph==='deload'?Math.ceil(b/2):b;
+const setsFor=(e,ph)=>{const b=e.s;return ph==='read'?Math.max(e.min||2,b-1):ph==='deload'?Math.ceil(b/2):b};
 const PHASE={read:['Readaptação','Deixe 3 a 4 repetições sobrando. Nada até a falha.'],hip:['Hipertrofia','Dupla progressão, com 1 a 2 repetições na reserva.'],deload:['Deload','Mesma carga, metade das séries. Recupere para o próximo ciclo.']};
 const docId=(p,ex)=>p+'__'+ex;
 const sessions=(p,ex)=>(state.logs[docId(p,ex)]||{}).sessions||[];
@@ -708,8 +708,8 @@ function suggest(p,ex,ph){
 function weekDates(){const n=new Date();n.setHours(0,0,0,0);const dow=(n.getDay()+6)%7;const m=new Date(n);m.setDate(n.getDate()-dow);return Array.from({length:7},(_,i)=>{const d=new Date(m);d.setDate(m.getDate()+i);return d})}
 function liftedOn(p,d){for(const k in state.logs){if(k.startsWith(p+'__')&&(state.logs[k].sessions||[]).some(s=>s.d===d&&s.sets.some(x=>x.ok||x.kg!=null||x.r!=null)))return true}return false}
 const ranOn=(p,d)=>((state.logs['run__'+p]||{}).sessions||[]).some(s=>s.d===d);
-function dayProgress(p,day,d){const wi=weekInfo();let tot=0,done=0;for(const ex of day.ex){const n=setsFor(EX[ex].s,wi.phase);tot+=n;const s=sessOn(p,ex,d);if(s)done+=Math.min(n,s.sets.filter(x=>x.ok).length)}return{tot,done}}
-function exDone(p,ex,d){const n=setsFor(EX[ex].s,weekInfo().phase),s=sessOn(p,ex,d);return s?Math.min(n,s.sets.filter(x=>x.ok).length)/n:0}
+function dayProgress(p,day,d){const wi=weekInfo();let tot=0,done=0;for(const ex of day.ex){const n=setsFor(EX[ex],wi.phase);tot+=n;const s=sessOn(p,ex,d);if(s)done+=Math.min(n,s.sets.filter(x=>x.ok).length)}return{tot,done}}
+function exDone(p,ex,d){const n=setsFor(EX[ex],weekInfo().phase),s=sessOn(p,ex,d);return s?Math.min(n,s.sets.filter(x=>x.ok).length)/n:0}
 
 
 /* ---------- dieta ---------- */
@@ -978,7 +978,7 @@ function vTreino(wi){
     return h+`<section class="hero"><div><div class="eyebrow">${WFULL[day.k]}${isToday?' · hoje':''}</div><h1>Corrida no condomínio</h1><p class="src">${runPlan(wi.w).t}. Leve, para recuperar as pernas para sexta e domingo.</p></div></section>
     <button class="cta" data-tab="corrida">${IC.play}<span>Abrir timer de corrida</span></button>`;
   }
-  const pr=dayProgress(p,day,dd),pct=pr.tot?pr.done/pr.tot:0,mins=Math.round(day.ex.reduce((a,ex)=>a+setsFor(EX[ex].s,wi.phase)*(restFor(ex)+40),0)/60/5)*5;
+  const pr=dayProgress(p,day,dd),pct=pr.tot?pr.done/pr.tot:0,mins=Math.round(day.ex.reduce((a,ex)=>a+setsFor(EX[ex],wi.phase)*(restFor(ex)+40),0)/60/5)*5;
   const first=day.ex.find(ex=>exDone(p,ex,dd)<1)||day.ex[0];
   const cta=pct>=1?`<button class="cta done" data-open="${day.ex[0]}">${IC.check}<span>Treino concluído. Rever exercícios</span></button>`:`<button class="cta" data-open="${first}">${IC.play}<span>${pr.done?'Continuar treino':'Começar treino'}${isToday?'':' deste dia'}</span></button>`;
   h+=`<section class="hero">
@@ -988,7 +988,7 @@ function vTreino(wi){
   </section>${cta}
   <div class="phase"><span class="chip">${PHASE[wi.phase][0]}</span><span>${PHASE[wi.phase][1]}</span></div>
   <div class="sec-h"><h2>Exercícios</h2><span>toque para abrir</span></div>
-  <ol class="list">${day.ex.map((ex,i)=>{const e=EX[ex],ns=setsFor(e.s,wi.phase),f=exDone(p,ex,dd),last=bestKg(lastS(p,ex)),m=(MUS[ex]||{p:[]}).p.map(k=>MNAME[k]).join(', ');
+  <ol class="list">${day.ex.map((ex,i)=>{const e=EX[ex],ns=setsFor(e,wi.phase),f=exDone(p,ex,dd),last=bestKg(lastS(p,ex)),m=(MUS[ex]||{p:[]}).p.map(k=>MNAME[k]).join(', ');
     const ck=f>=1?`<span class="ck full">${IC.check}</span>`:f>0?`<span class="ck part" style="--p:${Math.round(f*100)}%"></span>`:`<span class="ck"></span>`;
     return `<li><button class="ex" data-open="${ex}"><span class="k tnum">${pad(i+1)}</span><span class="plate">${IMG[ex]?`<img src="${IMG[ex][1]}" alt="">`:''}</span><span class="t"><b>${e.n}</b><small><em class="tnum">${ns}×${e.r}</em>${m}</small></span><span class="end">${ck}<span class="last tnum${last?'':' none'}">${last?fmtKg(last)+' kg':'—'}</span></span></button></li>`}).join('')}</ol>`;
   return h;
@@ -1088,7 +1088,7 @@ function vAjustes(){
 function curList(){const day=DAYS.find(d=>d.k===state.day);return day&&day.ex?day.ex:[]}
 function renderSheet(){
   const el=$('#sheet');if(!state.sheet){el.hidden=true;document.body.classList.remove('sheet-open');document.body.style.overflow='';return}
-  const ex=state.sheet,e=EX[ex],wi=weekInfo(),p=state.person,ns=setsFor(e.s,wi.phase),dd=dayDate(state.day),cur=sessOn(p,ex,dd),sg=suggest(p,ex,wi.phase),list=curList(),idx=list.indexOf(ex);
+  const ex=state.sheet,e=EX[ex],wi=weekInfo(),p=state.person,ns=setsFor(e,wi.phase),dd=dayDate(state.day),cur=sessOn(p,ex,dd),sg=suggest(p,ex,wi.phase),list=curList(),idx=list.indexOf(ex);
   const o=p==='a'?'b':'a',os=lastS(o,ex);
   const m=MUS[ex]||{p:[],s:[]},ch=(k,c)=>`<span class="mchip"><i class="${c}"></i>${MNAME[k]}</span>`;
   let rows='';
@@ -1109,7 +1109,7 @@ function renderSheet(){
   el.hidden=false;document.body.classList.add('sheet-open');document.body.style.overflow='hidden';
   if(reduce.matches)drawFigs(1);
 }
-function readSets(){const ex=state.sheet,ns=setsFor(EX[ex].s,weekInfo().phase),dd=dayDate(state.day),cur=sessOn(state.person,ex,dd),out=[];
+function readSets(){const ex=state.sheet,ns=setsFor(EX[ex],weekInfo().phase),dd=dayDate(state.day),cur=sessOn(state.person,ex,dd),out=[];
   for(let i=0;i<ns;i++){out.push({kg:num($('#kg-'+i)?.value),r:(v=>v==null?null:Math.round(v))(num($('#rp-'+i)?.value)),ok:!!(cur&&cur.sets[i]&&cur.sets[i].ok)})}return out}
 function saveSets(sets){
   const p=state.person,ex=state.sheet,id=docId(p,ex),dd=dayDate(state.day);
