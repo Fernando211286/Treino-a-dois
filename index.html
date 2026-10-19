@@ -807,14 +807,20 @@ const grKey=()=>{try{return localStorage.getItem(GRK)||''}catch(e){return ''}};
 async function iaGroq(prompt,blob,signal){
   let first=null;
   const content=[{type:'text',text:prompt+'\nResponda somente com o JSON, sem texto antes ou depois.'}];if(blob)content.push({type:'image_url',image_url:{url:'data:'+(blob.type||'image/jpeg')+';base64,'+await b64(blob)}});
-  const call=async(extra,model)=>{
+  let grMax=1200;
+  const call0=async(extra,model)=>{
     let r,j;
-    try{r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+grKey()},body:JSON.stringify(Object.assign({model:model||(()=>{try{return localStorage.getItem('treino-a-dois-groq-modelo')}catch(e){}})()||'qwen/qwen3.8-27b',messages:[{role:'user',content}],temperature:0.2,max_tokens:2500},extra))});j=await r.json()}
+    try{r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+grKey()},body:JSON.stringify(Object.assign({model:model||(()=>{try{return localStorage.getItem('treino-a-dois-groq-modelo')}catch(e){}})()||'qwen/qwen3.8-27b',messages:[{role:'user',content}],temperature:0.2,max_tokens:grMax},extra))});j=await r.json()}
     catch(e){if(e&&e.name==='AbortError')throw{code:'aborted'};throw{code:'rede',det:'Groq: sem conexão'}}
     if(!r.ok){const m=String(j&&j.error&&j.error.message||'');throw{code:r.status===401||/api key/i.test(m)?'chave':r.status===429?'rate_limited':r.status>=500?'ocupado':'falha',st:r.status,det:'Groq HTTP '+r.status+': '+m.slice(0,140)}}
     const t=String(j&&j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content||'').replace(/<think>[\s\S]*?<\/think>/g,'');
     const m=t.match(/\{[\s\S]*\}/);if(!m)throw{code:'falha',det:'Groq: resposta sem dados'};try{return JSON.parse(m[0])}catch(e){throw{code:'falha',det:'Groq: resposta incompleta'}}
   };
+  /* limite de tokens por minuto da conta gratuita: reduz o pedido e tenta de novo */
+  const call=async(extra,model)=>{try{return await call0(extra,model)}catch(e){
+    if(!e||e.st!==429||!/too large/i.test(e.det||''))throw e;
+    const lm=(e.det||'').match(/Limit\s*(\d+)/i);grMax=Math.max(300,Math.min(Math.floor(grMax/2),lm?Math.floor(+lm[1]*0.7):grMax));
+    return await call0(extra,model)}};
   /* raciocínio escondido; se o parâmetro não for aceito (400), tenta sem ele */
   try{return await call({reasoning_format:'hidden'})}
   catch(e){if(!e||(e.st!==400&&e.st!==404))throw e;first=e}
@@ -830,7 +836,7 @@ async function iaChaves(prompt,blob,signal){
   let ge=null;
   if(grKey()){try{return await iaGroq(prompt,blob,signal)}catch(e){if(!iaKey()||(e&&e.code==='aborted'))throw e;ge=e}}
   try{return await iaGemini(prompt,blob,signal)}
-  catch(e){if(ge&&e&&e.code!=='aborted'){e.det=[ge.det,e.det&&('Gemini '+e.det)].filter(Boolean).join(' · ');if(e.code==='ocupado')e.code='falha'}throw e}
+  catch(e){if(ge&&e&&e.code!=='aborted'){e.det=[ge.det,e.det&&('Gemini '+e.det)].filter(Boolean).join(' · ');if(e.code==='ocupado')e.code='falha';if(e.code==='chave'){e.code='falha';e.det='a chave do Gemini (reserva) é inválida, troque ou apague em Ajustes · '+e.det}}throw e}
 }
 const b64=blob=>new Promise((ok,no)=>{const fr=new FileReader();fr.onload=()=>ok(String(fr.result).split(',')[1]||'');fr.onerror=no;fr.readAsDataURL(blob)});
 async function iaGemini(prompt,blob,signal){
