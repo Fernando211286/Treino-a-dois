@@ -762,8 +762,9 @@ async function analisar(){
   if(!FOTO.blob&&!FOTO.note.trim()){toast('Tire uma foto ou escreva o que comeu');return}
   let sample=null;try{if(window.claude&&window.claude.use)sample=await window.claude.use('sample')}catch(e){}
   if(sample&&FOTO.blob){const lim=await sample.limits().catch(()=>null);if(!lim||!lim.images)sample=null}
-  const viaSheet=!sample&&typeof SHURL!=='undefined'&&!!SHURL;
-  if(!sample&&!viaSheet){FOTO.err='Para calcular as calorias, conecte a planilha em Ajustes (com a chave de IA configurada no Apps Script) ou abra o app pelo link do Claude.';render();return}
+  const viaKey=!sample&&!!iaKey();
+  const viaSheet=!sample&&!viaKey&&typeof SHURL!=='undefined'&&!!SHURL;
+  if(!sample&&!viaKey&&!viaSheet){FOTO.err='Falta a chave de IA. Vá em Ajustes > Calorias pela foto, cole a chave e tente de novo.';render();return}
   const meal=FOTO.meal==null?mealNow(p):FOTO.meal,ml=meal>=0?D.meals[meal]:null;
   FOTO.busy=true;FOTO.err='';FOTO.res=null;render();
   const ctl=new AbortController();FOTO.ctl=ctl;
@@ -784,7 +785,7 @@ Responda APENAS com um objeto JSON com estas chaves:
 - "itens": lista de objetos {"nome": string, "porcao": string, "kcal": inteiro, "p": inteiro, "c": inteiro, "g": inteiro}; lista vazia se não for comida
 - "obs": string, uma frase curta (dúvida sobre porção ou dica de proteína)`;
   try{
-    const r=sample?await sample.json(prompt,{images:FOTO.blob?[FOTO.blob]:undefined,signal:ctl.signal,modelTier:'default'}):await iaPlanilha(prompt,FOTO.blob,ctl.signal);
+    const r=sample?await sample.json(prompt,{images:FOTO.blob?[FOTO.blob]:undefined,signal:ctl.signal,modelTier:'default'}):viaKey?await iaGemini(prompt,FOTO.blob,ctl.signal):await iaPlanilha(prompt,FOTO.blob,ctl.signal);
     if(FOTO.ctl!==ctl)return;
     if(!r||r.e_comida===false||r.e_comida==='false'){FOTO.res=null;FOTO.err='Não vi comida nessa foto'+(r&&r.visto?' (parece: '+String(r.visto).slice(0,80)+')':'')+'. Fotografe o prato de cima, com boa luz.';return}
     const it=Array.isArray(r&&r.itens)?r.itens.filter(x=>x&&x.nome).map(x=>({nome:String(x.nome).slice(0,60),porcao:String(x.porcao||'').slice(0,60),kcal:Math.round(+x.kcal||0),p:Math.round(+x.p||0),c:Math.round(+x.c||0),g:Math.round(+x.g||0)})):[];
@@ -793,8 +794,20 @@ Responda APENAS com um objeto JSON com estas chaves:
     if(!it.length)FOTO.err='Não reconheci comida nessa foto. Fotografe o prato de cima, com boa luz.';else if(r.confianca==='baixa')FOTO.res.obs=('Confiança baixa na identificação, confira os itens. '+FOTO.res.obs).trim();
   }catch(e){
     if(FOTO.ctl!==ctl)return;
-    FOTO.err=e&&e.code==='sem_chave'?'A chave de IA ainda não foi configurada no Apps Script da planilha (veja o passo a passo no README do projeto).':e&&e.code==='pin'?'PIN incorreto. Informe o PIN em Ajustes e tente de novo.':e&&e.code==='not_granted'?'Você não autorizou o envio para o Claude. Toque em "Calcular" de novo e permita.':e&&e.code==='rate_limited'?'Muitas análises seguidas. Espere um minuto e tente de novo.':e&&e.code==='image_rejected'?'Essa imagem não foi aceita. Tente tirar outra foto.':e&&e.code==='aborted'?'':'Não consegui analisar agora. Tente de novo.';
+    FOTO.err=e&&e.code==='chave'?'A chave de IA foi recusada. Confira em Ajustes > Calorias pela foto se colou a chave inteira.':e&&e.code==='rede'?'Sem internet agora. Tente de novo.':e&&e.code==='sem_chave'?'A chave de IA ainda não foi configurada no Apps Script da planilha (veja o passo a passo no README do projeto).':e&&e.code==='pin'?'PIN incorreto. Informe o PIN em Ajustes e tente de novo.':e&&e.code==='not_granted'?'Você não autorizou o envio para o Claude. Toque em "Calcular" de novo e permita.':e&&e.code==='rate_limited'?'Muitas análises seguidas. Espere um minuto e tente de novo.':e&&e.code==='image_rejected'?'Essa imagem não foi aceita. Tente tirar outra foto.':e&&e.code==='aborted'?'':'Não consegui analisar agora. Tente de novo.';
   }finally{if(FOTO.ctl===ctl){FOTO.busy=false;FOTO.ctl=null;render()}}
+}
+const IAK='treino-a-dois-chave-ia';
+const iaKey=()=>{try{return localStorage.getItem(IAK)||''}catch(e){return ''}};
+const b64=blob=>new Promise((ok,no)=>{const fr=new FileReader();fr.onload=()=>ok(String(fr.result).split(',')[1]||'');fr.onerror=no;fr.readAsDataURL(blob)});
+async function iaGemini(prompt,blob,signal){
+  const parts=[];if(blob)parts.push({inline_data:{mime_type:blob.type||'image/jpeg',data:await b64(blob)}});parts.push({text:prompt});
+  let r,j;
+  try{r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent',{method:'POST',signal,headers:{'Content-Type':'application/json','x-goog-api-key':iaKey()},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{responseMimeType:'application/json',temperature:0.2}})});j=await r.json()}
+  catch(e){if(e&&e.name==='AbortError')throw{code:'aborted'};throw{code:'rede'}}
+  if(!r.ok){const m=String(j&&j.error&&j.error.message||'');throw{code:/API key|API_KEY|permission|PERMISSION/i.test(m)?'chave':r.status===429?'rate_limited':'falha'}}
+  const t=((j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[]).map(p=>p.text||'').join('');
+  const m=t.match(/\{[\s\S]*\}/);if(!m)throw{code:'falha'};return JSON.parse(m[0]);
 }
 async function iaPlanilha(prompt,blob,signal){
   let img='',mime='';
@@ -988,6 +1001,11 @@ function vAjustes(){
   <div class="card"><div class="sec-h" style="margin:0"><h2>Abrir no celular dela</h2></div>
     <ol class="steps-list"><li>Toque em <b>Copiar link dela</b> e envie para ela.</li><li>Ela abre o link no navegador: o app já vem no perfil dela e conectado à planilha. Na primeira vez, ela digita o PIN.</li><li>Ela adiciona à tela de início pelo menu do navegador.</li></ol>
     <button class="cta" id="copy-her">Copiar link dela</button></div>`}
+  <div class="card form"><div class="sec-h" style="margin:0"><h2>Calorias pela foto</h2><span>${iaKey()?'chave salva':'sem chave'}</span></div>
+    <ol class="steps-list"><li>Abra <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener"><b>aistudio.google.com/apikey</b></a> com sua conta Google.</li><li>Toque em <b>Criar chave de API</b> e copie a chave.</li><li>Cole aqui embaixo e toque em <b>Salvar chave</b>.</li></ol>
+    <label>Chave do Gemini (gratuita)<input id="cfg-ia" type="password" value="${esc(iaKey())}" placeholder="AIza…" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <button class="cta" id="ia-save">Salvar chave</button>
+    <p class="note">A chave fica só neste celular. Não vai para a planilha nem para o GitHub. Cada celular salva a sua.</p></div>
   <p class="note">Ilustrações dos exercícios: <a href="https://github.com/everkinetic/data" target="_blank" rel="noopener">Everkinetic</a>, licença CC BY-SA 4.0.</p>`;
 }
 
@@ -1074,6 +1092,7 @@ document.addEventListener('click',ev=>{
     if(old.sessions.some(s=>s.d===td))old.sessions=old.sessions.filter(s=>s.d!==td);else old.sessions.push({d:td});
     old.sessions.sort((a,b)=>a.d<b.d?-1:1);old.sessions=old.sessions.slice(-80);state.logs[id]=old;writeDoc('logs/'+id,old);render();return}
   if(D.rt){if(D.rt==='reset'){RT.i=0;RT.left=RT.ph[0][1];RT.on=false;keepAwake(false)}else{if(RT.i>=RT.ph.length){RT.i=0;RT.left=RT.ph[0][1]}RT.on=!RT.on;if(RT.on){beep(990,.15);keepAwake(true)}else keepAwake(false)}render();return}
+  if(b.id==='ia-save'){const v=$('#cfg-ia').value.trim();if(v&&!/^[\w-]{20,}$/.test(v)){toast('Essa chave parece incompleta');return}try{v?localStorage.setItem(IAK,v):localStorage.removeItem(IAK)}catch(e){}render();toast(v?'Chave salva. Já pode fotografar o prato':'Chave removida');return}
   if(b.id==='sheet-save'){const v=$('#cfg-sheet').value.trim();if(v&&!/^https:\/\/script\.google(usercontent)?\.com\//.test(v)){toast('Esse não parece um link do Apps Script');return}
     SHURL=v;SHSIG='';try{v?localStorage.setItem(SHK,v):localStorage.removeItem(SHK)}catch(e){}
     if(v){Object.keys(state.logs).forEach(k=>DIRTY['logs/'+k]=1);saveDirty();initSheets();toast('Conectando à planilha…')}else{state.sync='local';render();toast('Planilha desconectada')}return}
