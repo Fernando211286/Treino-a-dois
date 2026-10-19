@@ -591,7 +591,7 @@ const IC={
 };
 
 /* ---------- estado ---------- */
-const APPV='19/10 12h10';
+const APPV='19/10 12h20';
 const WD=['dom','seg','ter','qua','qui','sex','sab'];
 const WFULL={seg:'Segunda',ter:'Terça',qua:'Quarta',qui:'Quinta',sex:'Sexta',sab:'Sábado',dom:'Domingo'};
 const DEF={names:{a:'Marido',b:'Esposa'},start:'2026-10-18'};
@@ -1033,13 +1033,13 @@ function vProg(){
 const isHer=()=>{try{return localStorage.getItem('treino-a-dois-dela')==='1'}catch(e){return false}};
 let UNLOCK=false;
 async function sha(t){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('treino-a-dois:'+t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
-const travado=()=>(isHer()||state.person==='b')&&!UNLOCK;
+const travado=()=>!UNLOCK&&(!!state.cfg.adm||isHer()||state.person==='b');
 function vAjustesTravado(){
   return `<section class="hero"><div><div class="eyebrow">Ajustes</div><h1>Vocês dois</h1></div></section>
   <div class="card form">
     <div class="two"><label>Nome 1<input value="${esc(name('a'))}" disabled></label><label>Nome 2<input value="${esc(name('b'))}" disabled></label></div>
     <label>Início do programa<input type="date" value="${state.cfg.start}" disabled></label>
-    <button class="btn2" id="unlock" style="justify-content:center">Ver outros ajustes (senha do ${esc(name('a'))})</button>
+    <button class="btn2" id="unlock" style="justify-content:center">Ver outros ajustes (senha)</button>
   </div>
   <p class="note">Versão ${APPV}</p>`;
 }
@@ -1068,9 +1068,10 @@ function vAjustes(){
     <label>Chave do Gemini (reserva, opcional)<input id="cfg-ia" type="password" value="${esc(iaKey())}" placeholder="Cole a chave aqui" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
     <button class="cta" id="ia-save">Salvar chaves</button>
     <p class="note">Se o Groq falhar, o app usa o Gemini automaticamente. As chaves ficam só neste celular, não vão para a planilha nem para o GitHub.</p></div>
-  ${isHer()||state.person==='b'?`<div class="card"><p class="note" style="margin:0">Ajustes desbloqueados até fechar o app.</p><button class="btn2" id="relock" style="margin-top:10px">Bloquear de novo</button></div>`:`<div class="card form"><div class="sec-h" style="margin:0"><h2>Senha do administrador</h2><span>${state.cfg.adm?'definida':'não definida'}</span></div>
-    <p class="note" style="margin:0">Bloqueia os Ajustes no celular dela. Com esta senha, você destrava lá quando precisar configurar algo.</p>
-    <label>Nova senha<input id="cfg-adm" type="password" autocomplete="new-password" placeholder="mínimo 4 caracteres"></label>
+  ${UNLOCK?`<div class="card"><p class="note" style="margin:0">Ajustes desbloqueados até fechar o app.</p><button class="btn2" id="relock" style="margin-top:10px">Bloquear de novo</button></div>`:''}
+  ${isHer()||state.person==='b'?'':`<div class="card form"><div class="sec-h" style="margin:0"><h2>Senha do administrador</h2><span>${state.cfg.adm?'definida':'não definida'}</span></div>
+    <p class="note" style="margin:0">${state.cfg.adm?'Para trocar, digite a nova senha.':'Defina a senha: depois disso os Ajustes ficam bloqueados nos dois perfis e só abrem com ela.'}</p>
+    <label>${state.cfg.adm?'Nova senha':'Senha'}<input id="cfg-adm" type="password" autocomplete="new-password" placeholder="mínimo 4 caracteres"></label>
     <button class="cta" id="adm-save">Salvar senha</button></div>`}
   <p class="note">Versão ${APPV}</p>
   <p class="note">Ilustrações dos exercícios: <a href="https://github.com/everkinetic/data" target="_blank" rel="noopener">Everkinetic</a>, licença CC BY-SA 4.0.</p>`;
@@ -1161,7 +1162,7 @@ document.addEventListener('click',ev=>{
   if(D.rt){if(D.rt==='reset'){RT.i=0;RT.left=RT.ph[0][1];RT.on=false;keepAwake(false)}else{if(RT.i>=RT.ph.length){RT.i=0;RT.left=RT.ph[0][1]}RT.on=!RT.on;if(RT.on){beep(990,.15);keepAwake(true)}else keepAwake(false)}render();return}
   if(b.id==='unlock'){if(!state.cfg.adm){toast('O '+name('a')+' ainda não definiu a senha no celular dele');return}const v=prompt('Senha do '+name('a'));if(v==null)return;sha(v).then(h=>{if(h===state.cfg.adm){UNLOCK=true;render();toast('Ajustes desbloqueados')}else toast('Senha incorreta')});return}
   if(b.id==='relock'){UNLOCK=false;render();toast('Ajustes bloqueados');return}
-  if(b.id==='adm-save'){const v=$('#cfg-adm').value;if(v.length<4){toast('Use pelo menos 4 caracteres');return}sha(v).then(h=>{state.cfg={...state.cfg,adm:h};lsSave();writeDoc('config/app',state.cfg);render();toast('Senha salva. Ela vale também no celular dela')});return}
+  if(b.id==='adm-save'){const v=$('#cfg-adm').value;if(v.length<4){toast('Use pelo menos 4 caracteres');return}sha(v).then(h=>{state.cfg={...state.cfg,adm:h};lsSave();writeDoc('config/app',state.cfg);render();UNLOCK=false;render();toast('Senha salva. Ajustes bloqueados nos dois perfis')});return}
   if(travado()&&['cfg-save','sheet-save','pin-set','ia-save','copy-her','adm-save'].includes(b.id)){toast('Ajustes bloqueados');return}
   if(b.id==='ia-save'){const g=$('#cfg-groq').value.replace(/\s+/g,''),v=$('#cfg-ia').value.replace(/\s+/g,'');if((g&&g.length<20)||(v&&v.length<20)){toast('Alguma chave parece incompleta');return}try{g?localStorage.setItem(GRK,g):localStorage.removeItem(GRK);v?localStorage.setItem(IAK,v):localStorage.removeItem(IAK)}catch(e){}render();toast(g||v?'Chaves salvas. Já pode fotografar o prato':'Chaves removidas');return}
   if(b.id==='sheet-save'){const v=$('#cfg-sheet').value.trim();if(v&&!/^https:\/\/script\.google(usercontent)?\.com\//.test(v)){toast('Esse não parece um link do Apps Script');return}
