@@ -17,4 +17,4 @@ Para funcionar no link do GitHub Pages, o Apps Script precisa de uma chave de IA
 2. No Apps Script da planilha: **Configurações do projeto > Propriedades do script > Adicionar**, nome `CHAVE_IA`, valor = a chave.
 3. Cole a versão nova do `apps-script.gs` e faça **Implantar > Gerenciar implantações > Editar > Nova versão** (o link /exec continua o mesmo).
 
-A chave fica só no Apps Script; nunca vai para o app nem para o GitHub. Aberto pelo link do Claude, o app usa o próprio Claude e não precisa da chave.
+A chave fica só no Apps Script; nunca vai para o app nem para o GitHub. A foto não é salva na planilha: uma miniatura fica só no celular, junto da refeição, e é apagada sozinha depois de 12 horas. Aberto pelo link do Claude, o app usa o próprio Claude e não precisa da chave.

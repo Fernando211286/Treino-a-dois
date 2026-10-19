@@ -308,6 +308,9 @@ button{cursor:pointer;-webkit-appearance:none;appearance:none}
 .ate{grid-column:1/-1;margin-top:4px;border-top:1px dashed var(--line);padding-top:8px;display:flex;flex-direction:column;gap:4px}
 .ate .lbl{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--me)}
 .ate .x{border:0;background:none;color:var(--muted);font-size:12px;font-weight:600;padding:2px 0;text-transform:none;letter-spacing:0}
+.atepic{display:flex;align-items:flex-end;gap:8px}
+.atepic img{width:72px;height:72px;object-fit:cover;border-radius:10px;background:var(--raised)}
+.atepic small{font-size:11.5px;color:var(--muted)}
 .meal.swapped>ul{opacity:.45;text-decoration:line-through;text-decoration-color:var(--faint)}
 .meal.swapped>.kc{text-decoration:line-through}
 .extras{display:flex;flex-direction:column;gap:10px}
@@ -794,13 +797,24 @@ async function iaPlanilha(prompt,blob,signal){
   const m=String(j.texto||'').match(/\{[\s\S]*\}/);if(!m)throw{code:'falha'};
   return JSON.parse(m[0]);
 }
+/* miniatura da foto: só neste celular, apagada após 12 h */
+const PHK='treino-a-dois-fotos',PH_TTL=12*3600*1000;
+function fotosGet(){let o={};try{o=JSON.parse(localStorage.getItem(PHK)||'{}')||{}}catch(e){}const n=Date.now();let ch=false;for(const k in o){if(!o[k]||n-o[k].t>PH_TTL){delete o[k];ch=true}}if(ch)try{localStorage.setItem(PHK,JSON.stringify(o))}catch(e){}return o}
+async function fotoGuardar(id,blob){
+  try{const url=URL.createObjectURL(blob);const img=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=url});URL.revokeObjectURL(url);
+    const k=Math.min(1,320/Math.max(img.naturalWidth,img.naturalHeight)),cv=document.createElement('canvas');cv.width=Math.round(img.naturalWidth*k);cv.height=Math.round(img.naturalHeight*k);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+    const o=fotosGet();o[id]={t:Date.now(),src:cv.toDataURL('image/jpeg',.7)};
+    try{localStorage.setItem(PHK,JSON.stringify(o))}catch(e){const ks=Object.keys(o).sort((a,b)=>o[a].t-o[b].t);while(ks.length>1){delete o[ks.shift()];try{localStorage.setItem(PHK,JSON.stringify(o));break}catch(e2){}}}
+    render()}catch(e){}
+}
+setInterval(()=>{const o=fotosGet();if(state.tab==='dieta'&&document.querySelector('.ate img')&&[...document.querySelectorAll('.ate img')].some(i=>!o[i.dataset.fid]))render()},60000);
 function fotoReset(){if(FOTO.ctl)try{FOTO.ctl.abort()}catch(e){}if(FOTO.img)URL.revokeObjectURL(FOTO.img);Object.assign(FOTO,{busy:false,res:null,err:'',img:null,blob:null,note:'',meal:null,ctl:null})}
 function fotoSave(){
   const p=state.person,td=todayKey(),r=FOTO.res;if(!r||!r.itens.length)return;
   const v=JSON.parse(JSON.stringify(dietDay(p,td)));v.f=v.f||[];
   const n=new Date();v.f.push({id:Date.now().toString(36),t:pad(n.getHours())+':'+pad(n.getMinutes()),meal:r.meal,nome:r.nome,itens:r.itens.map(x=>[x.nome,x.porcao,x.kcal]),kcal:r.kcal,p:r.p,c:r.c,g:r.g});
   if(r.meal>=0&&!v.m.includes(r.meal))v.m=[...v.m,r.meal].sort();
-  setDietDay(p,td,v);fotoReset();render();toast('Refeição registrada: '+r.kcal+' kcal');
+  const fid=v.f[v.f.length-1].id,bl=FOTO.blob;setDietDay(p,td,v);fotoReset();render();if(bl)fotoGuardar(fid,bl);toast('Refeição registrada: '+r.kcal+' kcal');
 }
 function fotoCard(p){
   const D=DIET[p],sel=FOTO.meal==null?mealNow(p):FOTO.meal,R=FOTO.res;
@@ -829,7 +843,7 @@ function vDieta(){
   const p=state.person,D=DIET[p],td=todayKey(),dd=dietDay(p,td),done=dd.m.length,pct=done/D.meals.length,f=eatenOf(dd),T=dayTotals(p,dd);
   const r=42,c=2*Math.PI*r,L=(D.cups*0.25).toString().replace('.',',');
   const fp=f.reduce((a,x)=>a+(x.p||0),0),left=D.kcal-T.kcal;
-  const ateHTML=x=>`<div class="ate"><div class="lbl"><span>Você comeu · ${esc(x.t)} · ${x.kcal} kcal</span><button class="x" data-delf="${esc(x.id)}" aria-label="Apagar registro">Apagar</button></div><ul class="items" style="margin:0">${(x.itens||[]).map(it=>`<li><span>${esc(it[0])}${it[1]?` <em>· ${esc(it[1])}</em>`:''}</span><b>${it[2]}</b></li>`).join('')}</ul><div class="eat"><div class="mac"><span>P <b>${x.p}g</b></span><span>C <b>${x.c}g</b></span><span>G <b>${x.g}g</b></span></div></div></div>`;
+  const PH=fotosGet();const ateHTML=x=>`<div class="ate">${PH[x.id]?`<div class="atepic"><img data-fid="${esc(x.id)}" src="${PH[x.id].src}" alt="Foto da refeição"><small>some em ${Math.max(1,Math.ceil((PH_TTL-(Date.now()-PH[x.id].t))/3600000))} h</small></div>`:''}<div class="lbl"><span>Você comeu · ${esc(x.t)} · ${x.kcal} kcal</span><button class="x" data-delf="${esc(x.id)}" aria-label="Apagar registro">Apagar</button></div><ul class="items" style="margin:0">${(x.itens||[]).map(it=>`<li><span>${esc(it[0])}${it[1]?` <em>· ${esc(it[1])}</em>`:''}</span><b>${it[2]}</b></li>`).join('')}</ul><div class="eat"><div class="mac"><span>P <b>${x.p}g</b></span><span>C <b>${x.c}g</b></span><span>G <b>${x.g}g</b></span></div></div></div>`;
   const extras=f.filter(x=>x.meal<0);
   return `<section class="hero"><div><div class="eyebrow">${esc(name(p))} · dieta</div><h1>${esc(D.goal)}</h1><p class="src">Plano diário, ${D.meals.length} refeições</p></div>
    <div class="ring"><svg viewBox="0 0 96 96"><circle class="tr" cx="48" cy="48" r="${r}" fill="none" stroke-width="8"/><circle class="pr" cx="48" cy="48" r="${r}" fill="none" stroke-width="8" stroke-linecap="round" stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${(c*(1-pct)).toFixed(1)}"/></svg><div class="lbl"><b class="tnum">${done}/${D.meals.length}</b><small>refeições</small></div></div></section>
@@ -1042,7 +1056,7 @@ document.addEventListener('click',ev=>{
   if(D.pick){D.pick='cam';const id='pick-cam';let el=document.getElementById(id);if(!el){el=document.createElement('input');el.type='file';el.accept='image/*';el.id=id;el.className='pick-in';el.tabIndex=-1;el.setAttribute('aria-hidden','true');el.setAttribute('capture','environment');document.body.appendChild(el)}el.click();return}
   if(D.fmeal!=null){FOTO.meal=+D.fmeal;if(FOTO.res)FOTO.res.meal=FOTO.meal;render();return}
   if(D.foto){const nt=$('#foto-note');if(nt)FOTO.note=nt.value;if(D.foto==='go')analisar();else if(D.foto==='save')fotoSave();else if(D.foto==='cancel'){if(FOTO.ctl)try{FOTO.ctl.abort()}catch(e){}FOTO.ctl=null;FOTO.busy=false;render()}else{fotoReset();render()}return}
-  if(D.delf){const p=state.person,td=todayKey(),v=JSON.parse(JSON.stringify(dietDay(p,td))),x=(v.f||[]).find(y=>y.id===D.delf);if(!x)return;v.f=v.f.filter(y=>y.id!==D.delf);if(x.meal>=0&&!v.f.some(y=>y.meal===x.meal))v.m=v.m.filter(k=>k!==x.meal);setDietDay(p,td,v);render();toast('Registro apagado');return}
+  if(D.delf){const p=state.person,td=todayKey(),v=JSON.parse(JSON.stringify(dietDay(p,td))),x=(v.f||[]).find(y=>y.id===D.delf);if(!x)return;v.f=v.f.filter(y=>y.id!==D.delf);try{const o=fotosGet();delete o[D.delf];localStorage.setItem(PHK,JSON.stringify(o))}catch(e){}if(x.meal>=0&&!v.f.some(y=>y.meal===x.meal))v.m=v.m.filter(k=>k!==x.meal);setDietDay(p,td,v);render();toast('Registro apagado');return}
   if(D.meal!=null){const p=state.person,td=todayKey(),v=JSON.parse(JSON.stringify(dietDay(p,td))),i=+D.meal;v.m=v.m.includes(i)?v.m.filter(x=>x!==i):[...v.m,i].sort();setDietDay(p,td,v);render();if(v.m.length===DIET[p].meals.length)toast('Dieta do dia completa!');return}
   if(D.water!=null){const p=state.person,td=todayKey(),v=JSON.parse(JSON.stringify(dietDay(p,td))),n=+D.water;v.w=v.w===n?n-1:n;setDietDay(p,td,v);render();return}
   if(D.rest){startRest(+D.rest);return}
