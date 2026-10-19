@@ -794,7 +794,7 @@ Responda APENAS com um objeto JSON com estas chaves:
     if(!it.length)FOTO.err='Não reconheci comida nessa foto. Fotografe o prato de cima, com boa luz.';else if(r.confianca==='baixa')FOTO.res.obs=('Confiança baixa na identificação, confira os itens. '+FOTO.res.obs).trim();
   }catch(e){
     if(FOTO.ctl!==ctl)return;
-    FOTO.err=e&&e.code==='chave'?'A chave de IA foi recusada. Confira em Ajustes > Calorias pela foto se colou a chave inteira.':e&&e.code==='rede'?'Sem internet agora. Tente de novo.':e&&e.code==='sem_chave'?'A chave de IA ainda não foi configurada no Apps Script da planilha (veja o passo a passo no README do projeto).':e&&e.code==='pin'?'PIN incorreto. Informe o PIN em Ajustes e tente de novo.':e&&e.code==='not_granted'?'Você não autorizou o envio para o Claude. Toque em "Calcular" de novo e permita.':e&&e.code==='rate_limited'?'Muitas análises seguidas. Espere um minuto e tente de novo.':e&&e.code==='image_rejected'?'Essa imagem não foi aceita. Tente tirar outra foto.':e&&e.code==='aborted'?'':'Não consegui analisar agora. Tente de novo.';
+    FOTO.err=e&&e.code==='chave'?'A chave de IA foi recusada. Confira em Ajustes > Calorias pela foto se colou a chave inteira.':e&&e.code==='rede'?'Sem internet agora. Tente de novo.':e&&e.code==='sem_chave'?'A chave de IA ainda não foi configurada no Apps Script da planilha (veja o passo a passo no README do projeto).':e&&e.code==='pin'?'PIN incorreto. Informe o PIN em Ajustes e tente de novo.':e&&e.code==='not_granted'?'Você não autorizou o envio para o Claude. Toque em "Calcular" de novo e permita.':e&&e.code==='rate_limited'?'Muitas análises seguidas. Espere um minuto e tente de novo.':e&&e.code==='image_rejected'?'Essa imagem não foi aceita. Tente tirar outra foto.':e&&e.code==='aborted'?'':'Não consegui analisar agora. Tente de novo.'+(e&&e.det?' ('+e.det+')':'');
   }finally{if(FOTO.ctl===ctl){FOTO.busy=false;FOTO.ctl=null;render()}}
 }
 const IAK='treino-a-dois-chave-ia';
@@ -807,13 +807,11 @@ async function iaGemini(prompt,blob,signal){
     let r,j;
     try{r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent',{method:'POST',signal,headers:{'Content-Type':'application/json','x-goog-api-key':iaKey()},body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:gc})});j=await r.json()}
     catch(e){if(e&&e.name==='AbortError')throw{code:'aborted'};throw{code:'rede'}}
-    if(!r.ok){const m=String(j&&j.error&&j.error.message||'');throw{code:/API key|API_KEY|PERMISSION_DENIED/i.test(m)?'chave':r.status===429?'rate_limited':'falha',st:r.status}}
+    if(!r.ok){const m=String(j&&j.error&&j.error.message||'');throw{code:/API key|API_KEY|PERMISSION_DENIED/i.test(m)?'chave':r.status===429?'rate_limited':'falha',det:'HTTP '+r.status+': '+m.slice(0,120)}}
     const t=((j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[]).map(p=>p.text||'').join('');
-    const m=t.match(/\{[\s\S]*\}/);if(!m)throw{code:'falha'};return JSON.parse(m[0]);
+    const m=t.match(/\{[\s\S]*\}/);if(!m)throw{code:'falha',det:'resposta sem dados: '+t.slice(0,80)};try{return JSON.parse(m[0])}catch(e){throw{code:'falha',det:'resposta incompleta'}}
   };
-  /* modelo rápido, sem "pensar"; se não estiver disponível, cai para o padrão */
-  try{return await call('gemini-flash-lite-latest',true)}
-  catch(e){if(e&&(e.code==='chave'||e.code==='aborted'||e.code==='rede'))throw e;return await call('gemini-flash-latest',false)}
+  return await call('gemini-flash-latest',false);
 }
 async function iaPlanilha(prompt,blob,signal){
   let img='',mime='';
