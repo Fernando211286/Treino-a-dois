@@ -9,7 +9,7 @@ O link da planilha é informado em Ajustes, dentro do app, e fica salvo só no c
 
 ## Calorias pela foto (aba Dieta)
 
-Na Dieta, use **Câmera** ou **Galeria** (ou descreva o prato) e o app estima calorias e macros de cada alimento.
+Na Dieta, fotografe o prato na hora (ou descreva o que comeu) e o app estima calorias e macros de cada alimento.
 
 Para funcionar no link do GitHub Pages, o Apps Script precisa de uma chave de IA:
 

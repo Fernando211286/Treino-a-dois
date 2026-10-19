@@ -274,8 +274,6 @@ button{cursor:pointer;-webkit-appearance:none;appearance:none}
 .eat .mac{display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
 .eat .mac b{color:var(--ink);font-weight:700}
 .snap{display:flex;flex-direction:column;gap:10px;min-width:0;max-width:100%}
-.shoot{display:grid;grid-template-columns:1fr auto;gap:8px}
-.shoot .btn2{justify-content:center}
 .snapbtn{border:0;border-radius:16px;background:var(--me);color:#fff;font-weight:700;font-size:16px;padding:15px 18px;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer}
 .snapbtn svg{width:22px;height:22px;flex:none}
 .pick-in{position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0}
@@ -823,7 +821,7 @@ function fotoCard(p){
   }
   return `<div class="card snap"><div class="sec-h" style="margin:0"><h2>Comi outra coisa</h2><span>foto ou texto</span></div>
    ${pick}
-   <div class="shoot"><button class="snapbtn" data-pick="cam">${IC.cam}<span>${FOTO.img?'Tirar outra foto':'Câmera'}</span></button><button class="btn2" data-pick="gal">Galeria</button></div>
+   <button class="snapbtn" data-pick="cam">${IC.cam}<span>${FOTO.img?'Tirar outra foto':'Fotografar o prato agora'}</span></button>
    <div class="alt"><input id="foto-note" type="text" placeholder="Ou descreva: 2 pães de queijo e café com leite" value="${esc(FOTO.note)}" enterkeyhint="go"><button class="btn2" data-foto="go" aria-label="Calcular pelo texto">${IC.spark}</button></div>
    ${res}</div>`;
 }
@@ -1041,7 +1039,7 @@ document.addEventListener('click',ev=>{
     if(sets[i].ok){beep(1200,.06);const left=sets.filter(x=>!x.ok).length;if(left>0)startRest(restFor(state.sheet));else toast('Exercício concluído!')}
     return;
   }
-  if(D.pick){const id='pick-'+D.pick;let el=document.getElementById(id);if(!el){el=document.createElement('input');el.type='file';el.accept='image/*';el.id=id;el.className='pick-in';el.tabIndex=-1;el.setAttribute('aria-hidden','true');if(D.pick==='cam')el.setAttribute('capture','environment');document.body.appendChild(el)}el.click();return}
+  if(D.pick){D.pick='cam';const id='pick-cam';let el=document.getElementById(id);if(!el){el=document.createElement('input');el.type='file';el.accept='image/*';el.id=id;el.className='pick-in';el.tabIndex=-1;el.setAttribute('aria-hidden','true');el.setAttribute('capture','environment');document.body.appendChild(el)}el.click();return}
   if(D.fmeal!=null){FOTO.meal=+D.fmeal;if(FOTO.res)FOTO.res.meal=FOTO.meal;render();return}
   if(D.foto){const nt=$('#foto-note');if(nt)FOTO.note=nt.value;if(D.foto==='go')analisar();else if(D.foto==='save')fotoSave();else if(D.foto==='cancel'){if(FOTO.ctl)try{FOTO.ctl.abort()}catch(e){}FOTO.ctl=null;FOTO.busy=false;render()}else{fotoReset();render()}return}
   if(D.delf){const p=state.person,td=todayKey(),v=JSON.parse(JSON.stringify(dietDay(p,td))),x=(v.f||[]).find(y=>y.id===D.delf);if(!x)return;v.f=v.f.filter(y=>y.id!==D.delf);if(x.meal>=0&&!v.f.some(y=>y.meal===x.meal))v.m=v.m.filter(k=>k!==x.meal);setDietDay(p,td,v);render();toast('Registro apagado');return}
@@ -1061,7 +1059,7 @@ document.addEventListener('click',ev=>{
     (navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>toast('Link copiado'),()=>{prompt('Copie o link:',u)});return}
   if(b.id==='cfg-save'){const a=$('#cfg-a').value.trim()||DEF.names.a,bb=$('#cfg-b').value.trim()||DEF.names.b,st=$('#cfg-start').value||state.cfg.start;state.cfg={...state.cfg,names:{a,b:bb},start:st};lsSave();writeDoc('config/app',state.cfg);render();toast('Ajustes salvos');return}
 });
-document.addEventListener('change',async ev=>{if(ev.target.classList&&ev.target.classList.contains('pick-in')){const fl=ev.target.files&&ev.target.files[0];ev.target.value='';if(!fl)return;if(FOTO.ctl)try{FOTO.ctl.abort()}catch(e){}FOTO.ctl=null;FOTO.busy=false;if(FOTO.img)URL.revokeObjectURL(FOTO.img);FOTO.res=null;FOTO.err='';FOTO.blob=await shrink(fl);FOTO.img=URL.createObjectURL(FOTO.blob);analisar();return}
+document.addEventListener('change',async ev=>{if(ev.target.classList&&ev.target.classList.contains('pick-in')){const fl=ev.target.files&&ev.target.files[0];ev.target.value='';if(!fl)return;if(fl.lastModified>0&&Date.now()-fl.lastModified>10*60*1000){toast('Use uma foto tirada agora');return}if(FOTO.ctl)try{FOTO.ctl.abort()}catch(e){}FOTO.ctl=null;FOTO.busy=false;if(FOTO.img)URL.revokeObjectURL(FOTO.img);FOTO.res=null;FOTO.err='';FOTO.blob=await shrink(fl);FOTO.img=URL.createObjectURL(FOTO.blob);analisar();return}
   if(state.sheet&&ev.target.closest('.sets')){clearTimeout(IT);saveSets(readSets());render()}});
 let IT=null;document.addEventListener('input',ev=>{if(ev.target.id==='foto-note'){FOTO.note=ev.target.value;return}if(state.sheet&&ev.target.closest('.sets')){clearTimeout(IT);IT=setTimeout(()=>{if(state.sheet){saveSets(readSets());render()}},900)}});
 addEventListener('pagehide',()=>{if(state.sheet&&$('.sets'))saveSets(readSets());lsSave()});
