@@ -6,6 +6,12 @@
  * Abas que o script cria e mantém:
  *  - "Treinos executados": uma linha por série registrada (data, pessoa, exercício, carga, reps).
  *  - "dados": cópia completa usada pelo app para sincronizar os dois celulares. Não edite.
+ *
+ * Calorias pela foto (aba Dieta): em Configurações do projeto > Propriedades do script,
+ * crie a propriedade CHAVE_IA com uma chave de API:
+ *  - do Gemini (gratuita, em aistudio.google.com/apikey), ou
+ *  - da Anthropic (começa com "sk-ant-", paga por uso, em console.anthropic.com).
+ * Opcional: MODELO_IA para trocar o modelo usado. A chave nunca vai para o app nem para o GitHub.
  */
 const ABA = 'dados';
 const PIN = 'TROQUE-AQUI'; // coloque aqui o PIN de vocês (não publique o PIN real no GitHub)
@@ -42,6 +48,9 @@ function doGet(e) {
 
 // O app grava um registro (um exercício, a dieta de um dia ou os ajustes)
 function doPost(e) {
+  let pedido = null;
+  try { pedido = JSON.parse(e.postData.contents); } catch (err) {}
+  if (pedido && pedido.acao === 'calorias') return calorias_(pedido);
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
@@ -119,4 +128,54 @@ function atualizarTreinos() {
     t.getRange(2, 1, linhas.length, cab.length).setValues(linhas);
     t.getRange(2, 1, linhas.length, 1).setNumberFormat('dd/MM/yyyy');
   }
+}
+
+/* ---------- calorias pela foto ---------- */
+function calorias_(d) {
+  if (d.pin !== PIN) return saida_({ ok: false, erro: 'pin' });
+  const props = PropertiesService.getScriptProperties();
+  const chave = (props.getProperty('CHAVE_IA') || '').trim();
+  if (!chave) return saida_({ ok: false, erro: 'sem chave' });
+  const prompt = String(d.prompt || '').slice(0, 4000);
+  const img = d.img ? String(d.img) : '';
+  const mime = /^image\/(jpeg|png|webp|gif)$/.test(d.mime || '') ? d.mime : 'image/jpeg';
+  if (!prompt) return saida_({ ok: false, erro: 'vazio' });
+  if (img.length > 7000000) return saida_({ ok: false, erro: 'foto grande demais' });
+  try {
+    const texto = chave.indexOf('sk-ant-') === 0
+      ? claude_(chave, props.getProperty('MODELO_IA') || 'claude-haiku-5-5', prompt, img, mime)
+      : gemini_(chave, props.getProperty('MODELO_IA') || 'gemini-flash-latest', prompt, img, mime);
+    return saida_({ ok: true, texto: texto });
+  } catch (err) {
+    return saida_({ ok: false, erro: String(err && err.message || err).slice(0, 300) });
+  }
+}
+
+function claude_(chave, modelo, prompt, img, mime) {
+  const conteudo = [];
+  if (img) conteudo.push({ type: 'image', source: { type: 'base64', media_type: mime, data: img } });
+  conteudo.push({ type: 'text', text: prompt });
+  const r = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { 'x-api-key': chave, 'anthropic-version': '2023-06-01' },
+    payload: JSON.stringify({ model: modelo, max_tokens: 1500, messages: [{ role: 'user', content: conteudo }] })
+  });
+  const j = JSON.parse(r.getContentText());
+  if (r.getResponseCode() !== 200) throw new Error((j.error && j.error.message) || ('HTTP ' + r.getResponseCode()));
+  return (j.content || []).filter(function (c) { return c.type === 'text'; }).map(function (c) { return c.text; }).join('');
+}
+
+function gemini_(chave, modelo, prompt, img, mime) {
+  const partes = [];
+  if (img) partes.push({ inline_data: { mime_type: mime, data: img } });
+  partes.push({ text: prompt });
+  const r = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(modelo) + ':generateContent', {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { 'x-goog-api-key': chave },
+    payload: JSON.stringify({ contents: [{ role: 'user', parts: partes }], generationConfig: { responseMimeType: 'application/json', temperature: 0.2 } })
+  });
+  const j = JSON.parse(r.getContentText());
+  if (r.getResponseCode() !== 200) throw new Error((j.error && j.error.message) || ('HTTP ' + r.getResponseCode()));
+  const c = j.candidates && j.candidates[0];
+  return ((c && c.content && c.content.parts) || []).map(function (p) { return p.text || ''; }).join('');
 }
