@@ -591,7 +591,7 @@ const IC={
 };
 
 /* ---------- estado ---------- */
-const APPV='19/10 12h20';
+const APPV='15';
 const WD=['dom','seg','ter','qua','qui','sex','sab'];
 const WFULL={seg:'Segunda',ter:'Terça',qua:'Quarta',qui:'Quinta',sex:'Sexta',sab:'Sábado',dom:'Domingo'};
 const DEF={names:{a:'Marido',b:'Esposa'},start:'2026-10-18'};
@@ -1041,7 +1041,7 @@ function vAjustesTravado(){
     <label>Início do programa<input type="date" value="${state.cfg.start}" disabled></label>
     <button class="btn2" id="unlock" style="justify-content:center">Ver outros ajustes (senha)</button>
   </div>
-  <p class="note">Versão ${APPV}</p>`;
+  <p class="note">Versão ${APPV} · 19/10/2026</p>`;
 }
 function vAjustes(){
   if(travado())return vAjustesTravado();
@@ -1073,7 +1073,7 @@ function vAjustes(){
     <p class="note" style="margin:0">${state.cfg.adm?'Para trocar, digite a nova senha.':'Defina a senha: depois disso os Ajustes ficam bloqueados nos dois perfis e só abrem com ela.'}</p>
     <label>${state.cfg.adm?'Nova senha':'Senha'}<input id="cfg-adm" type="password" autocomplete="new-password" placeholder="mínimo 4 caracteres"></label>
     <button class="cta" id="adm-save">Salvar senha</button></div>`}
-  <p class="note">Versão ${APPV}</p>
+  <p class="note">Versão ${APPV} · 19/10/2026</p>
   <p class="note">Ilustrações dos exercícios: <a href="https://github.com/everkinetic/data" target="_blank" rel="noopener">Everkinetic</a>, licença CC BY-SA 4.0.</p>`;
 }
 
