@@ -19,3 +19,7 @@ Para funcionar no link do GitHub Pages, o app usa o **Groq** (gratuito, sem cart
 Se o Groq falhar, o app tenta o Gemini automaticamente. A chave fica só no celular (cada celular salva a sua). Alternativa: guardar a chave no Apps Script, na propriedade `CHAVE_IA`, e publicar uma nova versão; aí ela vale para os dois celulares conectados à planilha.
 
 A foto não é salva na planilha: uma miniatura fica só no celular, junto da refeição, e é apagada sozinha depois de 12 horas. Aberto pelo link do Claude, o app usa o próprio Claude e não precisa da chave.
+
+## Fotos dos exercícios
+
+As fotos de início e fim de cada exercício (pasta `img/`) vêm do [Free Exercise DB](https://github.com/yuhonas/free-exercise-db), em domínio público.
