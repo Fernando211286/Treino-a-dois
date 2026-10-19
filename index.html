@@ -803,10 +803,11 @@ const GRK='treino-a-dois-chave-groq';
 const grKey=()=>{try{return localStorage.getItem(GRK)||''}catch(e){return ''}};
 /* Groq (principal): rápido e gratuito, modelo com visão */
 async function iaGroq(prompt,blob,signal){
+  let first=null;
   const content=[{type:'text',text:prompt+'\nResponda somente com o JSON, sem texto antes ou depois.'}];if(blob)content.push({type:'image_url',image_url:{url:'data:'+(blob.type||'image/jpeg')+';base64,'+await b64(blob)}});
-  const call=async extra=>{
+  const call=async(extra,model)=>{
     let r,j;
-    try{r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+grKey()},body:JSON.stringify(Object.assign({model:'qwen/qwen3.8-27b',messages:[{role:'user',content}],temperature:0.2,max_tokens:2500},extra))});j=await r.json()}
+    try{r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+grKey()},body:JSON.stringify(Object.assign({model:model||(()=>{try{return localStorage.getItem('treino-a-dois-groq-modelo')}catch(e){}})()||'qwen/qwen3.8-27b',messages:[{role:'user',content}],temperature:0.2,max_tokens:2500},extra))});j=await r.json()}
     catch(e){if(e&&e.name==='AbortError')throw{code:'aborted'};throw{code:'rede',det:'Groq: sem conexão'}}
     if(!r.ok){const m=String(j&&j.error&&j.error.message||'');throw{code:r.status===401||/api key/i.test(m)?'chave':r.status===429?'rate_limited':r.status>=500?'ocupado':'falha',st:r.status,det:'Groq HTTP '+r.status+': '+m.slice(0,140)}}
     const t=String(j&&j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content||'').replace(/<think>[\s\S]*?<\/think>/g,'');
@@ -814,7 +815,14 @@ async function iaGroq(prompt,blob,signal){
   };
   /* raciocínio escondido; se o parâmetro não for aceito (400), tenta sem ele */
   try{return await call({reasoning_format:'hidden'})}
-  catch(e){if(e&&e.st===400)return await call({});throw e}
+  catch(e){if(!e||(e.st!==400&&e.st!==404))throw e;first=e}
+  try{return await call({})}catch(e){if(!e||(e.st!==400&&e.st!==404))throw e}
+  /* modelo recusado: procura na conta outros modelos com visão e tenta cada um */
+  let ids=[];
+  try{const r=await fetch('https://api.groq.com/openai/v1/models',{signal,headers:{'Authorization':'Bearer '+grKey()}});const j=await r.json();ids=((j&&j.data)||[]).map(m=>m.id).filter(id=>/vision|vl|scout|maverick|muse|qwen3\.8|llava|pixtral|gemma-?3/i.test(id)&&id!=='qwen/qwen3.8-27b')}catch(e){}
+  let last=first;
+  for(const id of ids.slice(0,4)){try{const out=await call({},id);try{localStorage.setItem('treino-a-dois-groq-modelo',id)}catch(e){}return out}catch(e){last=e;if(!e||(e.st!==400&&e.st!==404))throw e}}
+  throw last
 }
 async function iaChaves(prompt,blob,signal){
   let ge=null;
@@ -1043,6 +1051,7 @@ function vAjustes(){
     <label>Chave do Gemini (reserva, opcional)<input id="cfg-ia" type="password" value="${esc(iaKey())}" placeholder="Cole a chave aqui" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
     <button class="cta" id="ia-save">Salvar chaves</button>
     <p class="note">Se o Groq falhar, o app usa o Gemini automaticamente. As chaves ficam só neste celular, não vão para a planilha nem para o GitHub.</p></div>
+  <p class="note">Versão 19/10 11h35</p>
   <p class="note">Ilustrações dos exercícios: <a href="https://github.com/everkinetic/data" target="_blank" rel="noopener">Everkinetic</a>, licença CC BY-SA 4.0.</p>`;
 }
 
