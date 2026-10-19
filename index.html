@@ -762,9 +762,9 @@ async function analisar(){
   if(!FOTO.blob&&!FOTO.note.trim()){toast('Tire uma foto ou escreva o que comeu');return}
   let sample=null;try{if(window.claude&&window.claude.use)sample=await window.claude.use('sample')}catch(e){}
   if(sample&&FOTO.blob){const lim=await sample.limits().catch(()=>null);if(!lim||!lim.images)sample=null}
-  const viaKey=!sample&&!!iaKey();
+  const viaKey=!sample&&!!(grKey()||iaKey());
   const viaSheet=!sample&&!viaKey&&typeof SHURL!=='undefined'&&!!SHURL;
-  if(!sample&&!viaKey&&!viaSheet){FOTO.err='Falta a chave de IA. Vá em Ajustes > Calorias pela foto, cole a chave e tente de novo.';render();return}
+  if(!sample&&!viaKey&&!viaSheet){FOTO.err='Falta a chave de IA. Vá em Ajustes > Calorias pela foto, cole a chave do Groq e tente de novo.';render();return}
   const meal=FOTO.meal==null?mealNow(p):FOTO.meal,ml=meal>=0?D.meals[meal]:null;
   FOTO.busy=true;FOTO.err='';FOTO.res=null;render();const t0=Date.now(),tick=setInterval(()=>{const el=document.getElementById('foto-seg');if(!FOTO.busy)clearInterval(tick);else if(el)el.textContent=Math.round((Date.now()-t0)/1000)+' s'+(el.dataset.retry?' · servidor cheio, tentando de novo':'')},1000);
   const ctl=new AbortController();FOTO.ctl=ctl;
@@ -785,7 +785,7 @@ Responda APENAS com um objeto JSON com estas chaves:
 - "itens": lista de objetos {"nome": string, "porcao": string, "kcal": inteiro, "p": inteiro, "c": inteiro, "g": inteiro}; lista vazia se não for comida
 - "obs": string, uma frase curta (dúvida sobre porção ou dica de proteína)`;
   try{
-    const r=sample?await sample.json(prompt,{images:FOTO.blob?[FOTO.blob]:undefined,signal:ctl.signal,modelTier:'default'}):viaKey?await iaGemini(prompt,FOTO.blob,ctl.signal):await iaPlanilha(prompt,FOTO.blob,ctl.signal);
+    const r=sample?await sample.json(prompt,{images:FOTO.blob?[FOTO.blob]:undefined,signal:ctl.signal,modelTier:'default'}):viaKey?await iaChaves(prompt,FOTO.blob,ctl.signal):await iaPlanilha(prompt,FOTO.blob,ctl.signal);
     if(FOTO.ctl!==ctl)return;
     if(!r||r.e_comida===false||r.e_comida==='false'){FOTO.res=null;FOTO.err='Não vi comida nessa foto'+(r&&r.visto?' (parece: '+String(r.visto).slice(0,80)+')':'')+'. Fotografe o prato de cima, com boa luz.';return}
     const it=Array.isArray(r&&r.itens)?r.itens.filter(x=>x&&x.nome).map(x=>({nome:String(x.nome).slice(0,60),porcao:String(x.porcao||'').slice(0,60),kcal:Math.round(+x.kcal||0),p:Math.round(+x.p||0),c:Math.round(+x.c||0),g:Math.round(+x.g||0)})):[];
@@ -794,11 +794,27 @@ Responda APENAS com um objeto JSON com estas chaves:
     if(!it.length)FOTO.err='Não reconheci comida nessa foto. Fotografe o prato de cima, com boa luz.';else if(r.confianca==='baixa')FOTO.res.obs=('Confiança baixa na identificação, confira os itens. '+FOTO.res.obs).trim();
   }catch(e){
     if(FOTO.ctl!==ctl)return;
-    FOTO.err=e&&e.code==='ocupado'?'O Gemini está sobrecarregado agora (problema do lado do Google). Tente de novo em 1 ou 2 minutos.':e&&e.code==='chave'?'A chave de IA foi recusada. Confira em Ajustes > Calorias pela foto se colou a chave inteira.':e&&e.code==='rede'?'Sem internet agora. Tente de novo.':e&&e.code==='sem_chave'?'A chave de IA ainda não foi configurada no Apps Script da planilha (veja o passo a passo no README do projeto).':e&&e.code==='pin'?'PIN incorreto. Informe o PIN em Ajustes e tente de novo.':e&&e.code==='not_granted'?'Você não autorizou o envio para o Claude. Toque em "Calcular" de novo e permita.':e&&e.code==='rate_limited'?'Muitas análises seguidas. Espere um minuto e tente de novo.':e&&e.code==='image_rejected'?'Essa imagem não foi aceita. Tente tirar outra foto.':e&&e.code==='aborted'?'':'Não consegui analisar agora. Tente de novo.'+(e&&e.det?' ('+e.det+')':'');
+    FOTO.err=e&&e.code==='ocupado'?'O Gemini está sobrecarregado agora (problema do lado do Google). Tente de novo em 1 ou 2 minutos.':e&&e.code==='chave'?'A chave de IA foi recusada. Confira em Ajustes > Calorias pela foto se colou a chave inteira.'+(e&&e.det?' ('+e.det+')':''):e&&e.code==='rede'?'Sem internet agora. Tente de novo.':e&&e.code==='sem_chave'?'A chave de IA ainda não foi configurada no Apps Script da planilha (veja o passo a passo no README do projeto).':e&&e.code==='pin'?'PIN incorreto. Informe o PIN em Ajustes e tente de novo.':e&&e.code==='not_granted'?'Você não autorizou o envio para o Claude. Toque em "Calcular" de novo e permita.':e&&e.code==='rate_limited'?'Muitas análises seguidas. Espere um minuto e tente de novo.':e&&e.code==='image_rejected'?'Essa imagem não foi aceita. Tente tirar outra foto.':e&&e.code==='aborted'?'':'Não consegui analisar agora. Tente de novo.'+(e&&e.det?' ('+e.det+')':'');
   }finally{if(FOTO.ctl===ctl){FOTO.busy=false;FOTO.ctl=null;render()}}
 }
 const IAK='treino-a-dois-chave-ia';
 const iaKey=()=>{try{return localStorage.getItem(IAK)||''}catch(e){return ''}};
+const GRK='treino-a-dois-chave-groq';
+const grKey=()=>{try{return localStorage.getItem(GRK)||''}catch(e){return ''}};
+/* Groq (principal): rápido e gratuito, modelo com visão */
+async function iaGroq(prompt,blob,signal){
+  const content=[{type:'text',text:prompt}];if(blob)content.push({type:'image_url',image_url:{url:'data:'+(blob.type||'image/jpeg')+';base64,'+await b64(blob)}});
+  let r,j;
+  try{r=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',signal,headers:{'Content-Type':'application/json','Authorization':'Bearer '+grKey()},body:JSON.stringify({model:'qwen/qwen3.8-27b',messages:[{role:'user',content}],response_format:{type:'json_object'},temperature:0.2,max_tokens:1500})});j=await r.json()}
+  catch(e){if(e&&e.name==='AbortError')throw{code:'aborted'};throw{code:'rede'}}
+  if(!r.ok){const m=String(j&&j.error&&j.error.message||'');throw{code:r.status===401||/api key/i.test(m)?'chave':r.status===429?'rate_limited':r.status>=500?'ocupado':'falha',det:'Groq HTTP '+r.status+': '+m.slice(0,120)}}
+  const t=String(j&&j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content||'').replace(/<think>[\s\S]*?<\/think>/g,'');
+  const m=t.match(/\{[\s\S]*\}/);if(!m)throw{code:'falha',det:'Groq: resposta sem dados'};try{return JSON.parse(m[0])}catch(e){throw{code:'falha',det:'Groq: resposta incompleta'}}
+}
+async function iaChaves(prompt,blob,signal){
+  if(grKey()){try{return await iaGroq(prompt,blob,signal)}catch(e){if(!iaKey()||(e&&e.code==='aborted'))throw e}}
+  return await iaGemini(prompt,blob,signal);
+}
 const b64=blob=>new Promise((ok,no)=>{const fr=new FileReader();fr.onload=()=>ok(String(fr.result).split(',')[1]||'');fr.onerror=no;fr.readAsDataURL(blob)});
 async function iaGemini(prompt,blob,signal){
   const parts=[];if(blob)parts.push({inline_data:{mime_type:blob.type||'image/jpeg',data:await b64(blob)}});parts.push({text:prompt});
@@ -1013,11 +1029,13 @@ function vAjustes(){
   <div class="card"><div class="sec-h" style="margin:0"><h2>Abrir no celular dela</h2></div>
     <ol class="steps-list"><li>Toque em <b>Copiar link dela</b> e envie para ela.</li><li>Ela abre o link no navegador: o app já vem no perfil dela e conectado à planilha. Na primeira vez, ela digita o PIN.</li><li>Ela adiciona à tela de início pelo menu do navegador.</li></ol>
     <button class="cta" id="copy-her">Copiar link dela</button></div>`}
-  <div class="card form"><div class="sec-h" style="margin:0"><h2>Calorias pela foto</h2><span>${iaKey()?'chave salva':'sem chave'}</span></div>
-    <ol class="steps-list"><li>Abra <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener"><b>aistudio.google.com/apikey</b></a> com sua conta Google.</li><li>Toque em <b>Criar chave de API</b> e copie a chave.</li><li>Cole aqui embaixo e toque em <b>Salvar chave</b>.</li></ol>
-    <label>Chave do Gemini (gratuita)<input id="cfg-ia" type="password" value="${esc(iaKey())}" placeholder="Cole a chave aqui" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
-    <button class="cta" id="ia-save">Salvar chave</button>
-    <p class="note">A chave fica só neste celular. Não vai para a planilha nem para o GitHub. Cada celular salva a sua.</p></div>
+  <div class="card form"><div class="sec-h" style="margin:0"><h2>Calorias pela foto</h2><span>${grKey()?'Groq ativo':iaKey()?'só Gemini':'sem chave'}</span></div>
+    <p class="note" style="margin:0"><b>Principal: Groq</b>, gratuito e rápido.</p>
+    <ol class="steps-list"><li>Abra <a href="https://console.groq.com/keys" target="_blank" rel="noopener"><b>console.groq.com/keys</b></a> e entre com sua conta Google.</li><li>Toque em <b>Create API Key</b>, dê um nome (ex.: Treino) e copie a chave.</li><li>Cole aqui embaixo e toque em <b>Salvar chaves</b>.</li></ol>
+    <label>Chave do Groq (principal)<input id="cfg-groq" type="password" value="${esc(grKey())}" placeholder="Cole a chave aqui" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <label>Chave do Gemini (reserva, opcional)<input id="cfg-ia" type="password" value="${esc(iaKey())}" placeholder="Cole a chave aqui" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <button class="cta" id="ia-save">Salvar chaves</button>
+    <p class="note">Se o Groq falhar, o app usa o Gemini automaticamente. As chaves ficam só neste celular, não vão para a planilha nem para o GitHub.</p></div>
   <p class="note">Ilustrações dos exercícios: <a href="https://github.com/everkinetic/data" target="_blank" rel="noopener">Everkinetic</a>, licença CC BY-SA 4.0.</p>`;
 }
 
@@ -1104,7 +1122,7 @@ document.addEventListener('click',ev=>{
     if(old.sessions.some(s=>s.d===td))old.sessions=old.sessions.filter(s=>s.d!==td);else old.sessions.push({d:td});
     old.sessions.sort((a,b)=>a.d<b.d?-1:1);old.sessions=old.sessions.slice(-80);state.logs[id]=old;writeDoc('logs/'+id,old);render();return}
   if(D.rt){if(D.rt==='reset'){RT.i=0;RT.left=RT.ph[0][1];RT.on=false;keepAwake(false)}else{if(RT.i>=RT.ph.length){RT.i=0;RT.left=RT.ph[0][1]}RT.on=!RT.on;if(RT.on){beep(990,.15);keepAwake(true)}else keepAwake(false)}render();return}
-  if(b.id==='ia-save'){const v=$('#cfg-ia').value.replace(/\s+/g,'');if(v&&v.length<20){toast('Essa chave parece incompleta');return}try{v?localStorage.setItem(IAK,v):localStorage.removeItem(IAK)}catch(e){}render();toast(v?'Chave salva. Já pode fotografar o prato':'Chave removida');return}
+  if(b.id==='ia-save'){const g=$('#cfg-groq').value.replace(/\s+/g,''),v=$('#cfg-ia').value.replace(/\s+/g,'');if((g&&g.length<20)||(v&&v.length<20)){toast('Alguma chave parece incompleta');return}try{g?localStorage.setItem(GRK,g):localStorage.removeItem(GRK);v?localStorage.setItem(IAK,v):localStorage.removeItem(IAK)}catch(e){}render();toast(g||v?'Chaves salvas. Já pode fotografar o prato':'Chaves removidas');return}
   if(b.id==='sheet-save'){const v=$('#cfg-sheet').value.trim();if(v&&!/^https:\/\/script\.google(usercontent)?\.com\//.test(v)){toast('Esse não parece um link do Apps Script');return}
     SHURL=v;SHSIG='';try{v?localStorage.setItem(SHK,v):localStorage.removeItem(SHK)}catch(e){}
     if(v){Object.keys(state.logs).forEach(k=>DIRTY['logs/'+k]=1);saveDirty();initSheets();toast('Conectando à planilha…')}else{state.sync='local';render();toast('Planilha desconectada')}return}
