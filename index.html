@@ -1003,7 +1003,7 @@ function vAjustes(){
     <button class="cta" id="copy-her">Copiar link dela</button></div>`}
   <div class="card form"><div class="sec-h" style="margin:0"><h2>Calorias pela foto</h2><span>${iaKey()?'chave salva':'sem chave'}</span></div>
     <ol class="steps-list"><li>Abra <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener"><b>aistudio.google.com/apikey</b></a> com sua conta Google.</li><li>Toque em <b>Criar chave de API</b> e copie a chave.</li><li>Cole aqui embaixo e toque em <b>Salvar chave</b>.</li></ol>
-    <label>Chave do Gemini (gratuita)<input id="cfg-ia" type="password" value="${esc(iaKey())}" placeholder="AIza…" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <label>Chave do Gemini (gratuita)<input id="cfg-ia" type="password" value="${esc(iaKey())}" placeholder="Cole a chave aqui" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
     <button class="cta" id="ia-save">Salvar chave</button>
     <p class="note">A chave fica só neste celular. Não vai para a planilha nem para o GitHub. Cada celular salva a sua.</p></div>
   <p class="note">Ilustrações dos exercícios: <a href="https://github.com/everkinetic/data" target="_blank" rel="noopener">Everkinetic</a>, licença CC BY-SA 4.0.</p>`;
@@ -1092,7 +1092,7 @@ document.addEventListener('click',ev=>{
     if(old.sessions.some(s=>s.d===td))old.sessions=old.sessions.filter(s=>s.d!==td);else old.sessions.push({d:td});
     old.sessions.sort((a,b)=>a.d<b.d?-1:1);old.sessions=old.sessions.slice(-80);state.logs[id]=old;writeDoc('logs/'+id,old);render();return}
   if(D.rt){if(D.rt==='reset'){RT.i=0;RT.left=RT.ph[0][1];RT.on=false;keepAwake(false)}else{if(RT.i>=RT.ph.length){RT.i=0;RT.left=RT.ph[0][1]}RT.on=!RT.on;if(RT.on){beep(990,.15);keepAwake(true)}else keepAwake(false)}render();return}
-  if(b.id==='ia-save'){const v=$('#cfg-ia').value.trim();if(v&&!/^[\w-]{20,}$/.test(v)){toast('Essa chave parece incompleta');return}try{v?localStorage.setItem(IAK,v):localStorage.removeItem(IAK)}catch(e){}render();toast(v?'Chave salva. Já pode fotografar o prato':'Chave removida');return}
+  if(b.id==='ia-save'){const v=$('#cfg-ia').value.trim();if(v&&!/^[\w.-]{20,}$/.test(v)){toast('Essa chave parece incompleta');return}try{v?localStorage.setItem(IAK,v):localStorage.removeItem(IAK)}catch(e){}render();toast(v?'Chave salva. Já pode fotografar o prato':'Chave removida');return}
   if(b.id==='sheet-save'){const v=$('#cfg-sheet').value.trim();if(v&&!/^https:\/\/script\.google(usercontent)?\.com\//.test(v)){toast('Esse não parece um link do Apps Script');return}
     SHURL=v;SHSIG='';try{v?localStorage.setItem(SHK,v):localStorage.removeItem(SHK)}catch(e){}
     if(v){Object.keys(state.logs).forEach(k=>DIRTY['logs/'+k]=1);saveDirty();initSheets();toast('Conectando à planilha…')}else{state.sync='local';render();toast('Planilha desconectada')}return}
