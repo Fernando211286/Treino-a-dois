@@ -591,7 +591,7 @@ const IC={
 };
 
 /* ---------- estado ---------- */
-const APPV='1.8';
+const APPV='1.9';
 const WD=['dom','seg','ter','qua','qui','sex','sab'];
 const WFULL={seg:'Segunda',ter:'Terça',qua:'Quarta',qui:'Quinta',sex:'Sexta',sab:'Sábado',dom:'Domingo'};
 const DEF={names:{a:'Marido',b:'Esposa'},start:'2026-10-18'};
@@ -1096,7 +1096,7 @@ function renderSheet(){
   <div class="sh-body"><div class="sh-in">
     ${IMG[ex]?`<div class="plate pic" role="img" aria-label="Execução: posição inicial e final"><img class="p0" src="${IMG[ex][0]}" alt=""><img class="p1" src="${IMG[ex][1]}" alt=""><div class="seg"><span class="s0">Início</span><span class="s1">Fim</span></div><span class="hint">toque para pausar</span></div>`:''}
     <div class="sh-title"><h2>${e.n}</h2><p><span class="tnum">${ns} séries · ${e.r} repetições · descanso ${restFor(ex)} s</span></p></div>
-    <div class="musrow">${svgFig(ex,'minifig')}<div class="mleg"><span class="mlab">Músculos</span>${m.p.map(k=>ch(k,'m1')).join('')}${m.s.map(k=>ch(k,'m2')).join('')}</div></div>
+    <div class="musrow"><div class="mleg"><span class="mlab">Músculos</span>${m.p.map(k=>ch(k,'m1')).join('')}${m.s.map(k=>ch(k,'m2')).join('')}</div></div>
     <div class="tip">${IC.spark}<span>${sg.msg}</span></div>
     <div class="sets"><div class="hd"><span></span><span>Carga kg</span><span>Repetições</span><span></span></div>${rows}</div>
     <div class="other">${os?`<div><b>${esc(name(o))}</b> da última vez (${fmtDate(os.d)}): ${os.sets.map(x=>`${x.kg!=null?fmtKg(x.kg):'?'}×${x.r??'?'}`).join(' · ')}</div>`:''}${prevS(p,ex)?`<div><b>Você</b> da última vez (${fmtDate(prevS(p,ex).d)}): ${prevS(p,ex).sets.map(x=>`${x.kg!=null?fmtKg(x.kg):'?'}×${x.r??'?'}`).join(' · ')}</div>`:''}</div>
