@@ -590,6 +590,7 @@ const IC={
 };
 
 /* ---------- estado ---------- */
+const APPV='19/10 12h00';
 const WD=['dom','seg','ter','qua','qui','sex','sab'];
 const WFULL={seg:'Segunda',ter:'Terça',qua:'Quarta',qui:'Quinta',sex:'Sexta',sab:'Sábado',dom:'Domingo'};
 const DEF={names:{a:'Marido',b:'Esposa'},start:'2026-10-18'};
@@ -1037,7 +1038,7 @@ function vAjustesTravado(){
     <ul class="steps-list"><li>Nomes: <b>${esc(name('a'))}</b> e <b>${esc(name('b'))}</b></li><li>Início do programa: <b>${fmtDate(state.cfg.start)}</b></li><li>Planilha: <b>${typeof SHURL!=='undefined'&&SHURL?(state.sync==='on'?'conectada':'conectando…'):'não conectada'}</b></li><li>Calorias pela foto: <b>${grKey()||iaKey()?'ativas':'sem chave'}</b></li></ul>
     <p class="note" style="margin:8px 0 0">Só o ${esc(name('a'))} pode alterar os ajustes. As mudanças que ele faz no celular dele chegam aqui sozinhas.</p>
     <button class="btn2" id="unlock" style="margin-top:10px">Desbloquear (senha do ${esc(name('a'))})</button></div>
-  <p class="note">Versão 19/10 11h50</p>`;
+  <p class="note">Versão ${APPV}</p>`;
 }
 function vAjustes(){
   if(isHer()&&!UNLOCK)return vAjustesTravado();
@@ -1068,7 +1069,7 @@ function vAjustes(){
     <p class="note" style="margin:0">Bloqueia os Ajustes no celular dela. Com esta senha, você destrava lá quando precisar configurar algo.</p>
     <label>Nova senha<input id="cfg-adm" type="password" autocomplete="new-password" placeholder="mínimo 4 caracteres"></label>
     <button class="cta" id="adm-save">Salvar senha</button></div>`}
-  <p class="note">Versão 19/10 11h50</p>
+  <p class="note">Versão ${APPV}</p>
   <p class="note">Ilustrações dos exercícios: <a href="https://github.com/everkinetic/data" target="_blank" rel="noopener">Everkinetic</a>, licença CC BY-SA 4.0.</p>`;
 }
 
@@ -1176,6 +1177,14 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden&&state.shee
 document.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&ev.target.id==='foto-note'){ev.preventDefault();FOTO.note=ev.target.value;analisar();return}if(ev.key==='Escape'&&state.sheet){state.sheet=null;renderSheet();render()}});
 
 render();restUI();requestAnimationFrame(loop);initDB();
+/* atualização automática: compara a versão publicada com a carregada */
+async function checaVersao(){
+  if(location.protocol!=='https:')return;
+  try{const r=await fetch(location.pathname+'?nc='+Date.now(),{cache:'no-store'});const t=await r.text();const m=t.match(/const APPV='([^']+)'/);
+    if(m&&m[1]!==APPV){let n=0;try{n=+sessionStorage.getItem('treino-a-dois-upd')||0}catch(e){}
+      if(n<2){try{sessionStorage.setItem('treino-a-dois-upd',String(n+1))}catch(e){}location.replace(location.pathname+'?v='+encodeURIComponent(m[1])+location.hash)}}}catch(e){}
+}
+setTimeout(checaVersao,1500);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checaVersao()});
 </script>
 
 </body></html>
