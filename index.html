@@ -767,21 +767,30 @@ async function analisar(){
   const meal=FOTO.meal==null?mealNow(p):FOTO.meal,ml=meal>=0?D.meals[meal]:null;
   FOTO.busy=true;FOTO.err='';FOTO.res=null;render();
   const ctl=new AbortController();FOTO.ctl=ctl;
-  const prompt=`Você é um nutricionista brasileiro estimando calorias de uma refeição real.
-${FOTO.blob?'A imagem anexada é a foto do prato/refeição que a pessoa vai comer.':'Não há foto; use só a descrição.'}
-${FOTO.note.trim()?'Descrição da pessoa (use para corrigir o que a foto não mostra, como quantidades, molhos e óleo): "'+FOTO.note.trim().slice(0,400)+'"':''}
-Refeição: ${ml?ml[1]:'extra/fora do plano'}. Meta diária: ${D.kcal} kcal, ${D.p} g de proteína.
-Identifique cada alimento, estime a porção em medida caseira brasileira (colheres, conchas, unidades, gramas) e calcule kcal, proteína, carboidrato e gordura de cada item, considerando óleo de preparo quando houver fritura ou refogado. Use valores da tabela TACO quando possível. Seja realista, sem arredondar para baixo.
-Se a imagem não mostrar comida, devolva itens vazios e explique em "obs".
-Responda APENAS com JSON neste formato, números inteiros:
-{"nome":"nome curto da refeição","itens":[{"nome":"arroz branco","porcao":"4 col. de sopa (100 g)","kcal":128,"p":3,"c":28,"g":0}],"kcal":0,"p":0,"c":0,"g":0,"obs":"uma frase curta: dúvida sobre porção ou dica para bater a meta de proteína"}`;
+  const prompt=`Você analisa fotos de refeições para um app de dieta. Seja rigoroso e honesto.
+${FOTO.blob?'Uma foto está anexada.':'Não há foto; use só a descrição da pessoa.'}
+${FOTO.note.trim()?'Descrição da pessoa: "'+FOTO.note.trim().slice(0,400)+'"':''}
+
+PASSO 1 — ${FOTO.blob?'Olhe a foto e diga objetivamente o que aparece nela, sem supor nada. Se NÃO houver comida ou bebida visível (por exemplo: objetos, papel, caneta, pessoas, paisagem, tela, foto borrada ou escura), responda e_comida=false e itens vazio. Não invente comida que não está na imagem, nem use a descrição para inventar comida que a foto não mostra.':'Se a descrição não for de comida ou bebida, responda e_comida=false e itens vazio.'}
+PASSO 2 — Só se houver comida: liste apenas os alimentos ${FOTO.blob?'visíveis na foto (a descrição serve só para ajustar quantidade, óleo, molho ou recheio desses alimentos)':'descritos'}, estime a porção em medida caseira brasileira e calcule kcal, proteína (p), carboidrato (c) e gordura (g) em gramas, com base na tabela TACO. Considere óleo de preparo em frituras e refogados.
+
+Contexto: refeição "${ml?ml[1]:'extra/fora do plano'}"; meta do dia ${D.kcal} kcal e ${D.p} g de proteína.
+
+Responda APENAS com um objeto JSON com estas chaves:
+- "visto": string, o que aparece na foto ou descrição, em poucas palavras
+- "e_comida": true ou false
+- "confianca": "alta", "media" ou "baixa"
+- "nome": string, nome curto da refeição (vazio se não for comida)
+- "itens": lista de objetos {"nome": string, "porcao": string, "kcal": inteiro, "p": inteiro, "c": inteiro, "g": inteiro}; lista vazia se não for comida
+- "obs": string, uma frase curta (dúvida sobre porção ou dica de proteína)`;
   try{
     const r=sample?await sample.json(prompt,{images:FOTO.blob?[FOTO.blob]:undefined,signal:ctl.signal,modelTier:'default'}):await iaPlanilha(prompt,FOTO.blob,ctl.signal);
     if(FOTO.ctl!==ctl)return;
+    if(!r||r.e_comida===false||r.e_comida==='false'){FOTO.res=null;FOTO.err='Não vi comida nessa foto'+(r&&r.visto?' (parece: '+String(r.visto).slice(0,80)+')':'')+'. Fotografe o prato de cima, com boa luz.';return}
     const it=Array.isArray(r&&r.itens)?r.itens.filter(x=>x&&x.nome).map(x=>({nome:String(x.nome).slice(0,60),porcao:String(x.porcao||'').slice(0,60),kcal:Math.round(+x.kcal||0),p:Math.round(+x.p||0),c:Math.round(+x.c||0),g:Math.round(+x.g||0)})):[];
     const sum=k=>it.reduce((a,x)=>a+x[k],0);
     FOTO.res={nome:String(r&&r.nome||'Refeição').slice(0,50),itens:it,kcal:sum('kcal'),p:sum('p'),c:sum('c'),g:sum('g'),obs:String(r&&r.obs||'').slice(0,240),meal};
-    if(!it.length)FOTO.err=FOTO.res.obs||'Não reconheci comida nessa foto. Tente outra mais de perto, de cima.';
+    if(!it.length)FOTO.err='Não reconheci comida nessa foto. Fotografe o prato de cima, com boa luz.';else if(r.confianca==='baixa')FOTO.res.obs=('Confiança baixa na identificação, confira os itens. '+FOTO.res.obs).trim();
   }catch(e){
     if(FOTO.ctl!==ctl)return;
     FOTO.err=e&&e.code==='sem_chave'?'A chave de IA ainda não foi configurada no Apps Script da planilha (veja o passo a passo no README do projeto).':e&&e.code==='pin'?'PIN incorreto. Informe o PIN em Ajustes e tente de novo.':e&&e.code==='not_granted'?'Você não autorizou o envio para o Claude. Toque em "Calcular" de novo e permita.':e&&e.code==='rate_limited'?'Muitas análises seguidas. Espere um minuto e tente de novo.':e&&e.code==='image_rejected'?'Essa imagem não foi aceita. Tente tirar outra foto.':e&&e.code==='aborted'?'':'Não consegui analisar agora. Tente de novo.';
