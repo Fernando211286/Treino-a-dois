@@ -613,7 +613,7 @@ async function initDB(){
 /* ---------- sincronização com Google Sheets (Apps Script) ---------- */
 const SHK='treino-a-dois-planilha',DIRTYK='treino-a-dois-pendentes';
 let SHURL='';try{SHURL=localStorage.getItem(SHK)||''}catch(e){}
-try{if(/^#(ela|b)(&|$)/i.test(location.hash||''))state.person='b';const m=(location.hash||'').match(/[#&]s=([^&]+)/);if(m){SHURL=decodeURIComponent(m[1]);localStorage.setItem(SHK,SHURL);history.replaceState(null,'',location.pathname+(state.person==='b'?'#ela':''))}}catch(e){}
+try{if(/^#(ela|b)(&|$)/i.test(location.hash||'')){state.person='b';localStorage.setItem('treino-a-dois-dela','1')}const m=(location.hash||'').match(/[#&]s=([^&]+)/);if(m){SHURL=decodeURIComponent(m[1]);localStorage.setItem(SHK,SHURL);history.replaceState(null,'',location.pathname+(state.person==='b'?'#ela':''))}}catch(e){}
 let SHPIN='';try{SHPIN=localStorage.getItem('treino-a-dois-pin')||''}catch(e){}
 function askPin(msg){const v=prompt(msg||'Digite o PIN do Treino a Dois');if(v==null)return false;SHPIN=v.trim();try{localStorage.setItem('treino-a-dois-pin',SHPIN)}catch(e){}return true}
 let DIRTY={};try{DIRTY=JSON.parse(localStorage.getItem(DIRTYK)||'{}')}catch(e){}
@@ -1027,7 +1027,20 @@ function vProg(){
   <div class="card"><div class="sec-h" style="margin:0"><h2>Evolução de carga</h2></div>
   ${rows.length?`<ul class="evo">${rows.map(([ex,ss])=>{const v=ss.map(bestKg).slice(-8),d=v[v.length-1]-bestKg(ss[0]);return`<li><span><b>${EX[ex].n}</b><small>${ss.length} ${ss.length>1?'treinos':'treino'}</small></span>${spark(v)}<span class="v"><b class="tnum">${fmtKg(v[v.length-1])}</b><small> kg</small><br><small class="${d>0?'up':''}">${d>0?'+'+fmtKg(d)+' kg':'início'}</small></span></li>`}).join('')}</ul>`:`<p class="note" style="margin:10px 0 0">Marque suas primeiras séries para ver aqui como a carga de cada exercício evolui.</p>`}</div>`;
 }
+/* trava de Ajustes no celular dela: só o Marido muda, com a senha dele */
+const isHer=()=>{try{return localStorage.getItem('treino-a-dois-dela')==='1'}catch(e){return false}};
+let UNLOCK=false;
+async function sha(t){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('treino-a-dois:'+t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+function vAjustesTravado(){
+  return `<section class="hero"><div><div class="eyebrow">Ajustes</div><h1>Vocês dois</h1></div></section>
+  <div class="card"><div class="sec-h" style="margin:0"><h2>Configurado pelo ${esc(name('a'))}</h2><span>bloqueado</span></div>
+    <ul class="steps-list"><li>Nomes: <b>${esc(name('a'))}</b> e <b>${esc(name('b'))}</b></li><li>Início do programa: <b>${fmtDate(state.cfg.start)}</b></li><li>Planilha: <b>${typeof SHURL!=='undefined'&&SHURL?(state.sync==='on'?'conectada':'conectando…'):'não conectada'}</b></li><li>Calorias pela foto: <b>${grKey()||iaKey()?'ativas':'sem chave'}</b></li></ul>
+    <p class="note" style="margin:8px 0 0">Só o ${esc(name('a'))} pode alterar os ajustes. As mudanças que ele faz no celular dele chegam aqui sozinhas.</p>
+    <button class="btn2" id="unlock" style="margin-top:10px">Desbloquear (senha do ${esc(name('a'))})</button></div>
+  <p class="note">Versão 19/10 11h50</p>`;
+}
 function vAjustes(){
+  if(isHer()&&!UNLOCK)return vAjustesTravado();
   return `<section class="hero"><div><div class="eyebrow">Ajustes</div><h1>Vocês dois</h1></div></section>
   <div class="card form">
     <div class="two"><label>Nome 1<input id="cfg-a" value="${esc(state.cfg.names.a)}" autocomplete="off"></label><label>Nome 2<input id="cfg-b" value="${esc(state.cfg.names.b)}" autocomplete="off"></label></div>
@@ -1051,7 +1064,11 @@ function vAjustes(){
     <label>Chave do Gemini (reserva, opcional)<input id="cfg-ia" type="password" value="${esc(iaKey())}" placeholder="Cole a chave aqui" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
     <button class="cta" id="ia-save">Salvar chaves</button>
     <p class="note">Se o Groq falhar, o app usa o Gemini automaticamente. As chaves ficam só neste celular, não vão para a planilha nem para o GitHub.</p></div>
-  <p class="note">Versão 19/10 11h35</p>
+  ${isHer()?`<div class="card"><p class="note" style="margin:0">Ajustes desbloqueados neste celular até fechar o app.</p><button class="btn2" id="relock" style="margin-top:10px">Bloquear de novo</button></div>`:`<div class="card form"><div class="sec-h" style="margin:0"><h2>Senha do administrador</h2><span>${state.cfg.adm?'definida':'não definida'}</span></div>
+    <p class="note" style="margin:0">Bloqueia os Ajustes no celular dela. Com esta senha, você destrava lá quando precisar configurar algo.</p>
+    <label>Nova senha<input id="cfg-adm" type="password" autocomplete="new-password" placeholder="mínimo 4 caracteres"></label>
+    <button class="cta" id="adm-save">Salvar senha</button></div>`}
+  <p class="note">Versão 19/10 11h50</p>
   <p class="note">Ilustrações dos exercícios: <a href="https://github.com/everkinetic/data" target="_blank" rel="noopener">Everkinetic</a>, licença CC BY-SA 4.0.</p>`;
 }
 
@@ -1138,6 +1155,10 @@ document.addEventListener('click',ev=>{
     if(old.sessions.some(s=>s.d===td))old.sessions=old.sessions.filter(s=>s.d!==td);else old.sessions.push({d:td});
     old.sessions.sort((a,b)=>a.d<b.d?-1:1);old.sessions=old.sessions.slice(-80);state.logs[id]=old;writeDoc('logs/'+id,old);render();return}
   if(D.rt){if(D.rt==='reset'){RT.i=0;RT.left=RT.ph[0][1];RT.on=false;keepAwake(false)}else{if(RT.i>=RT.ph.length){RT.i=0;RT.left=RT.ph[0][1]}RT.on=!RT.on;if(RT.on){beep(990,.15);keepAwake(true)}else keepAwake(false)}render();return}
+  if(b.id==='unlock'){if(!state.cfg.adm){toast('O '+name('a')+' ainda não definiu a senha no celular dele');return}const v=prompt('Senha do '+name('a'));if(v==null)return;sha(v).then(h=>{if(h===state.cfg.adm){UNLOCK=true;render();toast('Ajustes desbloqueados')}else toast('Senha incorreta')});return}
+  if(b.id==='relock'){UNLOCK=false;render();toast('Ajustes bloqueados');return}
+  if(b.id==='adm-save'){const v=$('#cfg-adm').value;if(v.length<4){toast('Use pelo menos 4 caracteres');return}sha(v).then(h=>{state.cfg={...state.cfg,adm:h};lsSave();writeDoc('config/app',state.cfg);render();toast('Senha salva. Ela vale também no celular dela')});return}
+  if(isHer()&&!UNLOCK&&['cfg-save','sheet-save','pin-set','ia-save','copy-her'].includes(b.id)){toast('Ajustes bloqueados');return}
   if(b.id==='ia-save'){const g=$('#cfg-groq').value.replace(/\s+/g,''),v=$('#cfg-ia').value.replace(/\s+/g,'');if((g&&g.length<20)||(v&&v.length<20)){toast('Alguma chave parece incompleta');return}try{g?localStorage.setItem(GRK,g):localStorage.removeItem(GRK);v?localStorage.setItem(IAK,v):localStorage.removeItem(IAK)}catch(e){}render();toast(g||v?'Chaves salvas. Já pode fotografar o prato':'Chaves removidas');return}
   if(b.id==='sheet-save'){const v=$('#cfg-sheet').value.trim();if(v&&!/^https:\/\/script\.google(usercontent)?\.com\//.test(v)){toast('Esse não parece um link do Apps Script');return}
     SHURL=v;SHSIG='';try{v?localStorage.setItem(SHK,v):localStorage.removeItem(SHK)}catch(e){}
