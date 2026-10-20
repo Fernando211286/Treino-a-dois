@@ -359,7 +359,7 @@ const EX={
  // Segunda — Peito e tríceps (base: dia de peito do Ramon Dino)
  supino_incl:{n:'Supino inclinado com halteres',s:4,r:'8–12',an:'incl',tool:'db',c:['Banco entre 30° e 45°, escápulas encaixadas','Desça os halteres até a linha do peito, cotovelos a ~45°','Suba unindo os halteres sem bater um no outro']},
  supino_maq:{n:'Supino na máquina',s:4,r:'8–12',an:'maqsupino',tool:'handle',c:['Ajuste o banco para as pegadas ficarem na linha do peito','Empurre sem tirar as costas do encosto','Volte devagar até sentir o peito alongar']},
- supino_decl:{n:'Supino declinado',s:3,min:3,r:'8–12',an:'decl',tool:'bar',c:['Pernas presas no apoio, cabeça abaixo do quadril','Desça a barra na parte de baixo do peito','Empurre na mesma linha, sem tirar as costas do banco']},
+ supino_decl:{n:'Supino declinado',s:3,r:'8–12',an:'decl',tool:'bar',c:['Pernas presas no apoio, cabeça abaixo do quadril','Desça a barra na parte de baixo do peito','Empurre na mesma linha, sem tirar as costas do banco']},
  peck_deck:{n:'Crossover (ou peck deck)',s:3,r:'12',an:'peckdeck',tool:'handle',c:['Polias no alto, um pé à frente, tronco levemente inclinado','Traga as mãos em arco até se encontrarem à frente do quadril','Volte abrindo devagar até sentir o peito alongar. No peck deck o movimento é o mesmo, sentado']},
  triceps_corda:{n:'Tríceps na corda',s:3,r:'10–12',an:'pushdown',tool:'handle',c:['Cotovelos colados ao corpo e parados','Estenda e abra a corda no final','Volte só até o antebraço ficar paralelo ao chão']},
  triceps_cabo_overhead:{n:'Tríceps overhead no cabo',s:3,r:'12',an:'overcabo',tool:'handle',c:['De costas para a polia, corda atrás da cabeça','Estenda os braços para frente e para cima','Mantenha os cotovelos apontados para frente']},
@@ -593,7 +593,7 @@ const IC={
 };
 
 /* ---------- estado ---------- */
-const APPV='2.3';
+const APPV='2.4';
 const WD=['dom','seg','ter','qua','qui','sex','sab'];
 const WFULL={seg:'Segunda',ter:'Terça',qua:'Quarta',qui:'Quinta',sex:'Sexta',sab:'Sábado',dom:'Domingo'};
 const DEF={names:{a:'Marido',b:'Esposa'},start:'2026-10-18'};
@@ -686,8 +686,8 @@ function weekInfo(){
   const diff=Math.round((n-s)/864e5),w=Math.max(1,Math.floor(diff/7)+1),cw=((w-1)%8)+1,cyc=Math.floor((w-1)/8)+1;
   return{w,cw,cyc,phase:cw<=2?'read':cw<=7?'hip':'deload'};
 }
-const setsFor=(e,ph)=>{const b=e.s;return ph==='read'?Math.max(e.min||2,b-1):ph==='deload'?Math.ceil(b/2):b};
-const PHASE={read:['Readaptação','Deixe 3 a 4 repetições sobrando. Nada até a falha.'],hip:['Hipertrofia','Dupla progressão, com 1 a 2 repetições na reserva.'],deload:['Deload','Mesma carga, metade das séries. Recupere para o próximo ciclo.']};
+const setsFor=(e,ph)=>{const b=e.s;return Math.max(3,ph==='read'?b-1:ph==='deload'?Math.ceil(b/2):b)};
+const PHASE={read:['Readaptação','Deixe 3 a 4 repetições sobrando. Nada até a falha.'],hip:['Hipertrofia','Dupla progressão, com 1 a 2 repetições na reserva.'],deload:['Deload','Mesma carga, menos séries (mínimo 3). Recupere para o próximo ciclo.']};
 const docId=(p,ex)=>p+'__'+ex;
 const sessions=(p,ex)=>(state.logs[docId(p,ex)]||{}).sessions||[];
 const sessOn=(p,ex,d)=>sessions(p,ex).find(s=>s.d===d);
