@@ -599,7 +599,7 @@ const IC={
 };
 
 /* ---------- estado ---------- */
-const APPV='3.0';
+const APPV='3.1';
 const WD=['dom','seg','ter','qua','qui','sex','sab'];
 const WFULL={seg:'Segunda',ter:'Terça',qua:'Quarta',qui:'Quinta',sex:'Sexta',sab:'Sábado',dom:'Domingo'};
 const DEF={names:{a:'Marido',b:'Esposa'},start:'2026-10-18'};
@@ -959,13 +959,12 @@ function vDieta(){
 
 /* ---------- render ---------- */
 const DORD=['seg','ter','qua','qui','sex','sab','dom'];
-function syncBanner(){
-  const n=Object.keys(DIRTY).length;let m='',btn='';
-  if(DB)return '';
-  if(!SHURL)m='Este celular não está ligado à planilha: os treinos ficam salvos só aqui. Abra de novo o link enviado pelo Marido.';
-  else if(state.sync==='pin'){m='Falta o PIN: os treinos ainda não foram para a planilha.';btn='<button class="btn2" id="pin-set" style="margin-top:8px">Informar PIN</button>'}
-  else if(state.sync==='err'&&n)m='Sem conexão com a planilha. '+n+(n>1?' registros aguardando':' registro aguardando')+' envio; seguem sozinhos quando a conexão voltar.';
-  return m?`<div class="card" role="status" style="border-left:4px solid #e0a020"><p class="note" style="margin:0">${m}</p>${btn}</div>`:'';
+function syncNote(){
+  const n=Object.keys(DIRTY).length;
+  if(!SHURL)return 'Sem planilha conectada: os treinos ficam só neste celular. Abra de novo o link enviado pelo Marido.';
+  if(state.sync==='pin')return 'Falta o PIN para enviar os treinos à planilha.';
+  if(state.sync==='err'&&n)return 'Sem conexão agora; '+n+(n>1?' registros serão enviados':' registro será enviado')+' quando voltar.';
+  return state.sync==='on'?'Conectado à planilha.':'Conectando à planilha…';
 }
 function render(){
   document.body.classList.toggle('me-b',state.person==='b');
@@ -975,7 +974,7 @@ function render(){
   const T=[['treino','Treino','lift'],['corrida','Corrida','run'],['progresso','Progresso','prog'],['dieta','Dieta','food'],['ajustes','Ajustes','set']];
   $('#tabs').innerHTML=T.map(([k,l,i])=>`<button class="tab" data-tab="${k}" ${state.tab===k?'aria-current="page"':''}>${IC[i]}<span>${l}</span></button>`).join('');
   const keep=state.tab==='ajustes'?[...document.querySelectorAll('#main input')].map(i=>[i.id,i.value]):[];
-  $('#main').innerHTML=syncBanner()+(state.tab==='treino'?vTreino(wi):state.tab==='corrida'?vCorrida(wi):state.tab==='progresso'?vProg():state.tab==='dieta'?vDieta():vAjustes());
+  $('#main').innerHTML=(state.tab==='treino'?vTreino(wi):state.tab==='corrida'?vCorrida(wi):state.tab==='progresso'?vProg():state.tab==='dieta'?vDieta():vAjustes());
   keep.forEach(([id,v])=>{const el=document.getElementById(id);if(el&&document.activeElement!==el)el.value=v});
   if(reduce.matches)drawFigs(1);
 }
@@ -1067,6 +1066,7 @@ function vAjustesTravado(){
     <label>Início do programa<input type="date" value="${state.cfg.start}" disabled></label>
     <button class="btn2" id="unlock" style="justify-content:center">Área do administrador</button>
   </div>
+  <p class="note">${syncNote()}</p>${SHURL&&state.sync==='pin'?'<button class="btn2" id="pin-set" style="justify-content:center">Informar PIN</button>':''}
   <p class="note">Versão ${APPV}</p>`;
 }
 function vAjustes(){
