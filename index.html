@@ -599,7 +599,7 @@ const IC={
 };
 
 /* ---------- estado ---------- */
-const APPV='2.9';
+const APPV='3.0';
 const WD=['dom','seg','ter','qua','qui','sex','sab'];
 const WFULL={seg:'Segunda',ter:'Terça',qua:'Quarta',qui:'Quinta',sex:'Sexta',sab:'Sábado',dom:'Domingo'};
 const DEF={names:{a:'Marido',b:'Esposa'},start:'2026-10-18'};
@@ -622,11 +622,13 @@ async function initDB(){
 
 /* ---------- sincronização com Google Sheets (Apps Script) ---------- */
 const SHK='treino-a-dois-planilha',DIRTYK='treino-a-dois-pendentes';
-let SHURL='';try{SHURL=localStorage.getItem(SHK)||''}catch(e){}
-try{if(/^#(ela|b)(&|$)/i.test(location.hash||'')){state.person='b';localStorage.setItem('treino-a-dois-dela','1')}const m=(location.hash||'').match(/[#&]s=([^&]+)/);if(m){SHURL=decodeURIComponent(m[1]);localStorage.setItem(SHK,SHURL);history.replaceState(null,'',location.pathname+(state.person==='b'?'#ela':''))}}catch(e){}
+let SHURL='',NEWSH=false;try{SHURL=localStorage.getItem(SHK)||''}catch(e){}
+try{if(/^#(ela|b)(&|$)/i.test(location.hash||'')){state.person='b';localStorage.setItem('treino-a-dois-dela','1')}const m=(location.hash||'').match(/[#&]s=([^&]+)/);if(m){const u=decodeURIComponent(m[1]);if(u!==SHURL)NEWSH=true;SHURL=u;localStorage.setItem(SHK,SHURL);history.replaceState(null,'',location.pathname+'#'+(state.person==='b'?'ela&':'')+'s='+encodeURIComponent(SHURL))}}catch(e){}
 let SHPIN='';try{SHPIN=localStorage.getItem('treino-a-dois-pin')||''}catch(e){}
 function askPin(msg){const v=prompt(msg||'Digite o PIN do Treino a Dois');if(v==null)return false;SHPIN=v.trim();try{localStorage.setItem('treino-a-dois-pin',SHPIN)}catch(e){}return true}
 let DIRTY={};try{DIRTY=JSON.parse(localStorage.getItem(DIRTYK)||'{}')}catch(e){}
+const mine=k=>k.startsWith(state.person+'__')||k.endsWith('__'+state.person);
+if(NEWSH){Object.keys(state.logs).filter(mine).forEach(k=>DIRTY['logs/'+k]=1);try{localStorage.setItem(DIRTYK,JSON.stringify(DIRTY))}catch(e){}}
 const SENDING={};let SHSIG='',SHT=null,SHBUSY=false;
 const saveDirty=()=>{try{localStorage.setItem(DIRTYK,JSON.stringify(DIRTY))}catch(e){}};
 const bodyOf=p=>p==='config/app'?state.cfg:state.logs[p.slice(5)];
@@ -957,6 +959,14 @@ function vDieta(){
 
 /* ---------- render ---------- */
 const DORD=['seg','ter','qua','qui','sex','sab','dom'];
+function syncBanner(){
+  const n=Object.keys(DIRTY).length;let m='',btn='';
+  if(DB)return '';
+  if(!SHURL)m='Este celular não está ligado à planilha: os treinos ficam salvos só aqui. Abra de novo o link enviado pelo Marido.';
+  else if(state.sync==='pin'){m='Falta o PIN: os treinos ainda não foram para a planilha.';btn='<button class="btn2" id="pin-set" style="margin-top:8px">Informar PIN</button>'}
+  else if(state.sync==='err'&&n)m='Sem conexão com a planilha. '+n+(n>1?' registros aguardando':' registro aguardando')+' envio; seguem sozinhos quando a conexão voltar.';
+  return m?`<div class="card" role="status" style="border-left:4px solid #e0a020"><p class="note" style="margin:0">${m}</p>${btn}</div>`:'';
+}
 function render(){
   document.body.classList.toggle('me-b',state.person==='b');
   const wi=weekInfo();
@@ -965,7 +975,7 @@ function render(){
   const T=[['treino','Treino','lift'],['corrida','Corrida','run'],['progresso','Progresso','prog'],['dieta','Dieta','food'],['ajustes','Ajustes','set']];
   $('#tabs').innerHTML=T.map(([k,l,i])=>`<button class="tab" data-tab="${k}" ${state.tab===k?'aria-current="page"':''}>${IC[i]}<span>${l}</span></button>`).join('');
   const keep=state.tab==='ajustes'?[...document.querySelectorAll('#main input')].map(i=>[i.id,i.value]):[];
-  $('#main').innerHTML=state.tab==='treino'?vTreino(wi):state.tab==='corrida'?vCorrida(wi):state.tab==='progresso'?vProg():state.tab==='dieta'?vDieta():vAjustes();
+  $('#main').innerHTML=syncBanner()+(state.tab==='treino'?vTreino(wi):state.tab==='corrida'?vCorrida(wi):state.tab==='progresso'?vProg():state.tab==='dieta'?vDieta():vAjustes());
   keep.forEach(([id,v])=>{const el=document.getElementById(id);if(el&&document.activeElement!==el)el.value=v});
   if(reduce.matches)drawFigs(1);
 }
@@ -1175,7 +1185,7 @@ document.addEventListener('click',ev=>{
   if(D.rt){if(D.rt==='reset'){RT.i=0;RT.left=RT.ph[0][1];RT.on=false;keepAwake(false)}else{if(RT.i>=RT.ph.length){RT.i=0;RT.left=RT.ph[0][1]}RT.on=!RT.on;if(RT.on){beep(990,.15);keepAwake(true)}else keepAwake(false)}render();return}
   if(b.id==='unlock'){const v=prompt('Senha');if(v==null)return;admOk(v.trim()).then(ok=>{if(ok){UNLOCK=true;render();toast('Ajustes desbloqueados')}else toast('Senha incorreta')});return}
   if(b.id==='relock'){UNLOCK=false;render();toast('Ajustes bloqueados');return}
-  if(travado()&&['cfg-save','sheet-save','pin-set','ia-save','copy-her','adm-save'].includes(b.id)){toast('Ajustes bloqueados');return}
+  if(travado()&&['cfg-save','sheet-save','ia-save','copy-her','adm-save'].includes(b.id)){toast('Ajustes bloqueados');return}
   if(b.id==='ia-save'){const g=$('#cfg-groq').value.replace(/\s+/g,''),v=$('#cfg-ia').value.replace(/\s+/g,'');if((g&&g.length<20)||(v&&v.length<20)){toast('Alguma chave parece incompleta');return}try{g?localStorage.setItem(GRK,g):localStorage.removeItem(GRK);v?localStorage.setItem(IAK,v):localStorage.removeItem(IAK)}catch(e){}render();toast(g||v?'Chaves salvas. Já pode fotografar o prato':'Chaves removidas');return}
   if(b.id==='sheet-save'){const v=$('#cfg-sheet').value.trim();if(v&&!/^https:\/\/script\.google(usercontent)?\.com\//.test(v)){toast('Esse não parece um link do Apps Script');return}
     SHURL=v;SHSIG='';try{v?localStorage.setItem(SHK,v):localStorage.removeItem(SHK)}catch(e){}
