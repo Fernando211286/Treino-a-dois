@@ -599,7 +599,7 @@ const IC={
 };
 
 /* ---------- estado ---------- */
-const APPV='3.1';
+const APPV='4.0';
 const WD=['dom','seg','ter','qua','qui','sex','sab'];
 const WFULL={seg:'Segunda',ter:'Terça',qua:'Quarta',qui:'Quinta',sex:'Sexta',sab:'Sábado',dom:'Domingo'};
 const DEF={names:{a:'Marido',b:'Esposa'},start:'2026-10-18'};
@@ -611,9 +611,9 @@ try{const h=(location.hash||'').toLowerCase();if(h==='#ela'||h==='#b')state.pers
 function lsSave(){try{localStorage.setItem(LSK,JSON.stringify({logs:state.logs,cfg:state.cfg,person:state.person}))}catch(e){}}
 let DB=null,canWrite=true;const WQ={};
 async function initDB(){
-  if(!window.claude||!window.claude.use)return initSheets();
+  if(!window.claude||!window.claude.use)return GH?initGH():initSheets();
   let db=null;try{db=await window.claude.use('db')}catch(e){}
-  if(!db)return initSheets();
+  if(!db)return GH?initGH():initSheets();
   DB=db;state.sync='on';
   try{db.collection('logs').onSnapshot(s=>{const o={};s.docs.forEach(d=>o[d.id]=JSON.parse(JSON.stringify(d.data())));state.logs={...state.logs,...o};lsSave();render()},()=>{state.sync='local';render()})}catch(e){}
   try{db.doc('config/app').onSnapshot(s=>{if(s.exists){const c=s.data();state.cfg=fixNames({...DEF,...c,names:{...DEF.names,...(c.names||{})}});lsSave();render()}},()=>{})}catch(e){}
@@ -671,9 +671,96 @@ function shSend(p){
    .catch(()=>{if(state.sync==='pin'){if(!typing())render();return}if(state.sync!=='err'){state.sync='err';if(!typing())render()}})
    .finally(()=>{SENDING[p]=false;if(DIRTY[p]&&state.sync==='on'&&JSON.stringify(bodyOf(p))!==snap)shSend(p)});
 }
+
+/* ---------- sincronização pelo GitHub (repositório privado de dados) ---------- */
+/* Cada celular grava o próprio arquivo (a.json = Marido, b.json = Esposa) e lê os dois. */
+const GHK='treino-a-dois-github',GHCT='treino-a-dois-cfg-t';
+let GH=null;
+const ghParse=v=>{const m=String(v||'').trim().match(/^([\w.-]+\/[\w.-]+):(\S{20,})$/);return m?{repo:m[1],tok:m[2]}:null};
+try{GH=ghParse(localStorage.getItem(GHK))}catch(e){}
+try{const m=(location.hash||'').match(/[#&]g=([^&]+)/);if(m){const g=ghParse(decodeURIComponent(m[1]));if(g){GH=g;localStorage.setItem(GHK,g.repo+':'+g.tok)}}}catch(e){}
+function fixHash(){try{const parts=[];if(state.person==='b'&&isHerLink())parts.push('ela');if(SHURL&&!GH)parts.push('s='+encodeURIComponent(SHURL));if(GH)parts.push('g='+encodeURIComponent(GH.repo+':'+GH.tok));history.replaceState(null,'',location.pathname+location.search+(parts.length?'#'+parts.join('&'):''))}catch(e){}}
+function isHerLink(){try{return /^#(ela|b)(&|$)/i.test(location.hash||'')||localStorage.getItem('treino-a-dois-dela')==='1'}catch(e){return false}}
+fixHash();
+const b64e=t=>btoa(unescape(encodeURIComponent(t)));
+const b64d=t=>decodeURIComponent(escape(atob(String(t).replace(/\s/g,''))));
+let GHMINE={},GHSHA={},GHREADY=false,GHT=null,GHBUSY=false,GHPUSH=null,GHSENDING=false;
+const ghFile=p=>(p==='b'?'b':'a')+'.json';
+function ghCfgT(){try{localStorage.setItem(GHCT,String(Date.now()))}catch(e){}}
+const ghMyCfgT=()=>{try{return +localStorage.getItem(GHCT)||0}catch(e){return 0}};
+async function ghApi(path,opt){
+  const r=await fetch('https://api.github.com/repos/'+GH.repo+'/contents/'+path,Object.assign({cache:'no-store'},opt||{},{headers:Object.assign({'Authorization':'Bearer '+GH.tok,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'},(opt&&opt.headers)||{})}));
+  let j=null;try{j=await r.json()}catch(e){}
+  return {st:r.status,j};
+}
+async function ghGet(f){
+  const {st,j}=await ghApi(f+'?t='+Date.now());
+  if(st===404){GHSHA[f]=null;return {docs:{},cfgT:0}}
+  if(st===401||st===403)throw {code:'tok'};
+  if(st!==200||!j)throw {code:'rede'};
+  GHSHA[f]=j.sha;
+  try{const o=JSON.parse(b64d(j.content||''));return {docs:o.docs||{},cfgT:+o.cfgT||0}}catch(e){return {docs:{},cfgT:0}}
+}
+function initGH(){
+  state.sync='wait';render();ghPull();
+  if(!GHT){GHT=setInterval(ghPull,30000);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')ghPull();else ghFlush()});
+    window.addEventListener('online',ghPull);
+    addEventListener('pagehide',ghFlush);}
+}
+async function ghPull(){
+  if(!GH||GHBUSY)return;GHBUSY=true;
+  try{
+    const me=state.person,mf=ghFile(me),of=ghFile(me==='a'?'b':'a');
+    const [mine,other]=await Promise.all([ghGet(mf),ghGet(of)]);
+    GHMINE=mine.docs;GHREADY=true;
+    const was=state.sync;state.sync='on';
+    if(typing()){GHBUSY=false;if(Object.keys(DIRTY).length)ghSchedule();if(was!=='on')render();return}
+    const o={};let cfg=null,cfgT=ghMyCfgT();
+    for(const src of [other,mine])for(const[p,b]of Object.entries(src.docs)){if(DIRTY[p])continue;if(p.startsWith('logs/'))o[p.slice(5)]=b}
+    for(const src of [mine,other])if(src.cfgT>cfgT&&src.docs['config/app']&&!DIRTY['config/app']){cfg=src.docs['config/app'];cfgT=src.cfgT}
+    const before=JSON.stringify([state.logs,state.cfg]);
+    state.logs={...state.logs,...o};
+    if(cfg){state.cfg=fixNames({...DEF,...cfg,names:{...DEF.names,...(cfg.names||{})}});try{localStorage.setItem(GHCT,String(cfgT))}catch(e){}}
+    // registros deste celular que ainda não estão no GitHub (ex.: feitos antes de conectar)
+    Object.keys(state.logs).filter(mine_).forEach(k=>{if(!('logs/'+k in GHMINE)||JSON.stringify(GHMINE['logs/'+k])!==JSON.stringify(state.logs[k]))DIRTY['logs/'+k]=1});saveDirty();
+    lsSave();
+    if(JSON.stringify([state.logs,state.cfg])!==before||was!=='on')render();
+    if(Object.keys(DIRTY).length)ghSchedule();
+  }catch(e){const was=state.sync;state.sync=e&&e.code==='tok'?'tok':'err';if(was!==state.sync&&!typing())render()}
+  GHBUSY=false;
+}
+const mine_=k=>k.startsWith(state.person+'__')||k.endsWith('__'+state.person);
+function ghSchedule(){clearTimeout(GHPUSH);GHPUSH=setTimeout(ghFlush,2500)}
+async function ghFlush(){
+  clearTimeout(GHPUSH);
+  if(!GH||GHSENDING||!Object.keys(DIRTY).length)return;
+  if(!GHREADY){ghPull();return} // nunca grava antes de ler o arquivo dela/dele (não apaga histórico)
+  GHSENDING=true;
+  const f=ghFile(state.person);
+  try{
+    for(let tent=0;tent<3;tent++){
+      const docs={...GHMINE};
+      Object.keys(state.logs).filter(mine_).forEach(k=>docs['logs/'+k]=state.logs[k]);
+      const cfgT=ghMyCfgT();if(cfgT)docs['config/app']=state.cfg;
+      const sent=JSON.stringify(docs),keys=Object.keys(DIRTY);
+      const body={message:'Treino '+(name(state.person)||state.person)+' '+new Date().toLocaleString('pt-BR'),content:b64e(JSON.stringify({docs,cfgT,quem:state.person,em:new Date().toISOString()},null,1))};
+      if(GHSHA[f])body.sha=GHSHA[f];
+      const {st,j}=await ghApi(f,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      if(st===200||st===201){GHSHA[f]=j&&j.content&&j.content.sha;GHMINE=JSON.parse(sent);
+        keys.forEach(p=>{const cur=p==='config/app'?state.cfg:state.logs[p.slice(5)];if(JSON.stringify(cur)===JSON.stringify(GHMINE[p])||cur==null)delete DIRTY[p]});saveDirty();
+        if(state.sync!=='on'){state.sync='on';if(!typing())render()}break}
+      if(st===401||st===403){state.sync='tok';if(!typing())render();break}
+      if(st===409||st===422){const r=await ghGet(f);GHMINE=r.docs;continue} // outro aparelho gravou antes: relê e tenta de novo
+      throw {code:'rede'};
+    }
+  }catch(e){if(state.sync!=='err'){state.sync='err';if(!typing())render()}}
+  GHSENDING=false;
+  if(Object.keys(DIRTY).length&&state.sync==='on')ghSchedule();
+}
 function writeDoc(path,body){
   lsSave();
-  if(!DB){if(SHURL){DIRTY[path]=1;saveDirty();shSend(path)}return}
+  if(!DB){if(GH){DIRTY[path]=1;saveDirty();if(path==='config/app')ghCfgT();ghSchedule()}else if(SHURL){DIRTY[path]=1;saveDirty();shSend(path)}return}
   if(!canWrite)return;
   WQ[path]=(WQ[path]||Promise.resolve()).then(()=>DB.doc(path).set(body)).catch(e=>{if(e&&e.code==='invalid_argument'){canWrite=false;state.sync='ro'}});
 }
@@ -961,6 +1048,7 @@ function vDieta(){
 const DORD=['seg','ter','qua','qui','sex','sab','dom'];
 function syncNote(){
   const n=Object.keys(DIRTY).length;
+  if(GH){if(state.sync==='tok')return 'O GitHub recusou o acesso. Peça ao Marido um link novo.';if(state.sync==='err')return n?'Sem conexão agora; '+n+(n>1?' registros serão enviados':' registro será enviado')+' quando voltar.':'Sem conexão com o GitHub agora.';return state.sync==='on'?(n?'Enviando para o GitHub…':'Salvo no GitHub.'):'Conectando ao GitHub…'}
   if(!SHURL)return 'Sem planilha conectada: os treinos ficam só neste celular. Abra de novo o link enviado pelo Marido.';
   if(state.sync==='pin')return 'Falta o PIN para enviar os treinos à planilha.';
   if(state.sync==='err'&&n)return 'Sem conexão agora; '+n+(n>1?' registros serão enviados':' registro será enviado')+' quando voltar.';
@@ -1079,13 +1167,18 @@ function vAjustes(){
   </div>
   ${DB?`<div class="card"><div class="sec-h" style="margin:0"><h2>Abrir no celular dela</h2></div>
     <ol class="steps-list"><li>No app, toque em <b>Compartilhar</b> e ative o link público.</li><li>Copie o link e coloque <b>#ela</b> no final.</li><li>Ela abre e adiciona à tela de início pelo navegador.</li></ol>
-    <p class="note">Os registros deste aparelho estão sincronizados com o app.</p></div>`:`<div class="card form"><div class="sec-h" style="margin:0"><h2>Planilha do Google</h2></div>
+    <p class="note">Os registros deste aparelho estão sincronizados com o app.</p></div>`:`<div class="card form"><div class="sec-h" style="margin:0"><h2>Salvar no GitHub</h2><span>${GH?(state.sync==='on'?'conectado':state.sync==='tok'?'token recusado':'…'):'desligado'}</span></div>
+    <label>Repositório de dados (privado)<input id="cfg-ghrepo" value="${esc(GH?GH.repo:'fernando211286/treino-a-dois-dados')}" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <label>Token do GitHub<input id="cfg-ghtok" type="password" value="${esc(GH?GH.tok:'')}" placeholder="github_pat_…" autocomplete="off" autocapitalize="off" spellcheck="false"></label>
+    <button class="cta" id="gh-save">Conectar GitHub</button>
+    <p class="note">${GH?syncNote()+' Os treinos dos dois ficam em a.json (Marido) e b.json (Esposa) no repositório.':'Com o GitHub conectado, o que ela registra chega neste celular e fica salvo no repositório.'}</p></div>
+  <div class="card form"><div class="sec-h" style="margin:0"><h2>Planilha do Google</h2></div>
     <label>Link do Apps Script (termina em /exec)<input id="cfg-sheet" value="${esc(SHURL)}" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off" inputmode="url"></label>
     <button class="cta" id="sheet-save">Conectar planilha</button>
     ${SHURL?`<button class="cta" id="pin-set" style="background:var(--raised);color:var(--ink)">Informar PIN</button>`:''}
     <p class="note">${!SHURL?'Sem planilha conectada: os registros ficam só neste celular.':state.sync==='on'?'Conectado. Os treinos de vocês dois ficam salvos na planilha, na aba Treinos executados.':state.sync==='pin'?'PIN incorreto ou não informado. Toque em <b>Informar PIN</b>.':state.sync==='err'?'Sem conexão com a planilha agora. O que você marcar fica guardado aqui e é enviado assim que a conexão voltar.':'Conectando à planilha…'}</p></div>
   <div class="card"><div class="sec-h" style="margin:0"><h2>Abrir no celular dela</h2></div>
-    <ol class="steps-list"><li>Toque em <b>Copiar link dela</b> e envie para ela.</li><li>Ela abre o link no navegador: o app já vem no perfil dela e conectado à planilha. Na primeira vez, ela digita o PIN.</li><li>Ela adiciona à tela de início pelo menu do navegador.</li></ol>
+    <ol class="steps-list"><li>Toque em <b>Copiar link dela</b> e envie para ela.</li><li>Ela abre o link no Safari: o app já vem no perfil dela e conectado ${GH?'ao GitHub':'à planilha'}.</li><li>Ela adiciona à tela de início pelo menu do navegador.</li></ol>
     <button class="cta" id="copy-her">Copiar link dela</button></div>`}
   <div class="card form"><div class="sec-h" style="margin:0"><h2>Calorias pela foto</h2><span>${grKey()?'Groq ativo':iaKey()?'só Gemini':'sem chave'}</span></div>
     <p class="note" style="margin:0"><b>Principal: Groq</b>, gratuito e rápido.</p>
@@ -1185,13 +1278,18 @@ document.addEventListener('click',ev=>{
   if(D.rt){if(D.rt==='reset'){RT.i=0;RT.left=RT.ph[0][1];RT.on=false;keepAwake(false)}else{if(RT.i>=RT.ph.length){RT.i=0;RT.left=RT.ph[0][1]}RT.on=!RT.on;if(RT.on){beep(990,.15);keepAwake(true)}else keepAwake(false)}render();return}
   if(b.id==='unlock'){const v=prompt('Senha');if(v==null)return;admOk(v.trim()).then(ok=>{if(ok){UNLOCK=true;render();toast('Ajustes desbloqueados')}else toast('Senha incorreta')});return}
   if(b.id==='relock'){UNLOCK=false;render();toast('Ajustes bloqueados');return}
-  if(travado()&&['cfg-save','sheet-save','ia-save','copy-her','adm-save'].includes(b.id)){toast('Ajustes bloqueados');return}
+  if(travado()&&['cfg-save','sheet-save','gh-save','ia-save','copy-her','adm-save'].includes(b.id)){toast('Ajustes bloqueados');return}
   if(b.id==='ia-save'){const g=$('#cfg-groq').value.replace(/\s+/g,''),v=$('#cfg-ia').value.replace(/\s+/g,'');if((g&&g.length<20)||(v&&v.length<20)){toast('Alguma chave parece incompleta');return}try{g?localStorage.setItem(GRK,g):localStorage.removeItem(GRK);v?localStorage.setItem(IAK,v):localStorage.removeItem(IAK)}catch(e){}render();toast(g||v?'Chaves salvas. Já pode fotografar o prato':'Chaves removidas');return}
   if(b.id==='sheet-save'){const v=$('#cfg-sheet').value.trim();if(v&&!/^https:\/\/script\.google(usercontent)?\.com\//.test(v)){toast('Esse não parece um link do Apps Script');return}
     SHURL=v;SHSIG='';try{v?localStorage.setItem(SHK,v):localStorage.removeItem(SHK)}catch(e){}
     if(v){Object.keys(state.logs).forEach(k=>DIRTY['logs/'+k]=1);saveDirty();initSheets();toast('Conectando à planilha…')}else{state.sync='local';render();toast('Planilha desconectada')}return}
+  if(b.id==='gh-save'){const r=$('#cfg-ghrepo').value.trim().replace(/^https:\/\/github\.com\//,'').replace(/\.git$|\/$/g,''),t=$('#cfg-ghtok').value.replace(/\s+/g,'');
+    if(!t){GH=null;try{localStorage.removeItem(GHK)}catch(e){}fixHash();state.sync='local';render();toast('GitHub desconectado');return}
+    const g=ghParse(r+':'+t);if(!g){toast('Confira o repositório (usuario/nome) e o token');return}
+    GH=g;GHREADY=false;GHMINE={};GHSHA={};try{localStorage.setItem(GHK,g.repo+':'+g.tok)}catch(e){}fixHash();
+    Object.keys(state.logs).filter(mine_).forEach(k=>DIRTY['logs/'+k]=1);saveDirty();initGH();toast('Conectando ao GitHub…');return}
   if(b.id==='pin-set'){if(askPin()){SHSIG='';shPull()}return}
-  if(b.id==='copy-her'){const u=location.origin+location.pathname+'#ela'+(SHURL?'&s='+encodeURIComponent(SHURL):'');
+  if(b.id==='copy-her'){const u=location.origin+location.pathname+'#ela'+(GH?'&g='+encodeURIComponent(GH.repo+':'+GH.tok):SHURL?'&s='+encodeURIComponent(SHURL):'');
     (navigator.clipboard?navigator.clipboard.writeText(u):Promise.reject()).then(()=>toast('Link copiado'),()=>{prompt('Copie o link:',u)});return}
   if(b.id==='cfg-save'){const a=$('#cfg-a').value.trim()||DEF.names.a,bb=$('#cfg-b').value.trim()||DEF.names.b,st=$('#cfg-start').value||state.cfg.start;state.cfg={...state.cfg,names:{a,b:bb},start:st};lsSave();writeDoc('config/app',state.cfg);render();toast('Ajustes salvos');return}
 });
